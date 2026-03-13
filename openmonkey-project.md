@@ -1,6 +1,6 @@
 # OpenMonkey — Custom Userscript Manager Chrome Extension
 
-> **Context:** Spawned from a conversation about auto-logging into a local Unraid server (`http://unraid.shaplabs/Dashboard`). The goal expanded into building a lightweight, privacy-respecting, open-source alternative to Tampermonkey/ViolentMonkey.
+> **Context:** Spawned from a conversation about auto-logging into a local Unraid server (`http://your-unraid.local/Dashboard`). The goal expanded into building a lightweight, privacy-respecting, open-source alternative to Tampermonkey/ViolentMonkey.
 
 ---
 
@@ -63,7 +63,7 @@ chrome.scripting.executeScript({
 ```js
 // ==UserScript==
 // @name     Unraid Auto Login
-// @match    http://unraid.shaplabs/*
+// @match    http://your-unraid.local/*
 // @run-at   document-end
 // ==/UserScript==
 
@@ -121,7 +121,7 @@ The immediate use case that kicked this off. Once the extension is working, add 
 ```js
 // ==UserScript==
 // @name     Unraid Auto Login
-// @match    http://unraid.shaplabs/*
+// @match    http://your-unraid.local/*
 // @run-at   document-end
 // ==/UserScript==
 
@@ -141,7 +141,7 @@ The immediate use case that kicked this off. Once the extension is working, add 
 
 > **Note:** Right-click → Inspect on the Unraid login form to confirm the exact `name` or `id` attributes for the username and password fields before finalizing the selectors.
 
-**After login redirect fix:** Set your Chrome startup tab to `http://unraid.shaplabs/Dashboard`. The script fires on the login page, submits the form, and Unraid lands you on Dashboard.
+**After login redirect fix:** Set your Chrome startup tab to `http://your-unraid.local/Dashboard`. The script fires on the login page, submits the form, and Unraid lands you on Dashboard.
 
 ---
 
