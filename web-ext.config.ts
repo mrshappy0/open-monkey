@@ -9,5 +9,4 @@ import { defineWebExtConfig } from 'wxt';
 //   • Developer mode toggle and pinned extension stay set after first run
 export default defineWebExtConfig({
   chromiumArgs: ['--user-data-dir=./.wxt/chrome-data'],
-  startUrls: ['google.com'],
 });
