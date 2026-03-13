@@ -5,6 +5,7 @@ export interface ScriptMeta {
   matches: string[];
   excludes: string[];
   runAt: 'document-start' | 'document-end' | 'document-idle';
+  maxRetries: number | null; // null = use global default from settings
 }
 
 const VALID_RUN_AT = ['document-start', 'document-end', 'document-idle'] as const;
@@ -25,6 +26,9 @@ export function parseMeta(code: string): ScriptMeta {
       : 'document-end'
   ) as ScriptMeta['runAt'];
 
+  const maxRetriesRaw = get('max-retries')[0];
+  const maxRetries = maxRetriesRaw !== undefined ? parseInt(maxRetriesRaw, 10) : null;
+
   return {
     name: get('name')[0] ?? 'Unnamed Script',
     description: get('description')[0] ?? '',
@@ -32,6 +36,7 @@ export function parseMeta(code: string): ScriptMeta {
     matches: get('match'),
     excludes: get('exclude'),
     runAt,
+    maxRetries: maxRetries !== null && !isNaN(maxRetries) ? maxRetries : null,
   };
 }
 

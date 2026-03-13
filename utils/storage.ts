@@ -1,5 +1,14 @@
 import { storage } from '#imports';
 
+export interface Settings {
+  maxRetries: number;
+}
+
+export const settingsItem = storage.defineItem<Settings>('local:settings', {
+  fallback: { maxRetries: 3 },
+  version: 1,
+});
+
 export interface UserScript {
   id: string;
   name: string;

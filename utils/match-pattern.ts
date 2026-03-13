@@ -35,7 +35,7 @@ export function matchesPattern(url: string, pattern: string): boolean {
 
     // Path check (pathname + search)
     const actual = urlObj.pathname + (urlObj.search || '');
-    const pathRegex = new RegExp(`^${escapeRegex(path).replace(/\\\*/g, '.*')}$`);
+    const pathRegex = new RegExp(`^${path.split('*').map(escapeRegex).join('.*')}$`);
     if (!pathRegex.test(actual)) return false;
 
     return true;

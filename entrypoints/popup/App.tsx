@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { parseMeta, SCRIPT_TEMPLATE } from '../../utils/meta-parser';
-import { scriptsItem, type UserScript } from '../../utils/storage';
+import { scriptsItem, settingsItem, type UserScript } from '../../utils/storage';
 import './App.css';
 
 type View = 'list' | 'editor';
@@ -11,12 +11,20 @@ export default function App() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editorCode, setEditorCode] = useState('');
   const [saving, setSaving] = useState(false);
+  const [maxRetries, setMaxRetries] = useState(3);
 
   useEffect(() => {
     scriptsItem.getValue().then(setScripts);
+    settingsItem.getValue().then(s => setMaxRetries(s.maxRetries));
     const unwatch = scriptsItem.watch(val => setScripts(val ?? []));
     return unwatch;
   }, []);
+
+  async function saveMaxRetries(value: number) {
+    const clamped = Math.max(0, Math.min(10, value));
+    setMaxRetries(clamped);
+    await settingsItem.setValue({ maxRetries: clamped });
+  }
 
   async function persist(updated: UserScript[]) {
     await scriptsItem.setValue(updated);
@@ -119,6 +127,18 @@ export default function App() {
           </div>
         ))}
       </main>
+      <footer className="settings-footer">
+        <span className="settings-label">Max retries</span>
+        <input
+          className="settings-input"
+          type="number"
+          min={0}
+          max={10}
+          value={maxRetries}
+          onChange={e => saveMaxRetries(parseInt(e.target.value, 10) || 0)}
+          title="How many times a script may run on the same page before stopping (0 = unlimited). Override per-script with @max-retries N."
+        />
+      </footer>
     </div>
   );
 }
