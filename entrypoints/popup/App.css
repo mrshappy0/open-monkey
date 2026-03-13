@@ -1,0 +1,185 @@
+/* ── Reset ──────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* ── App shell ───────────────────────────────────────── */
+.app {
+  display: flex;
+  flex-direction: column;
+  width: 420px;
+  min-height: 120px;
+  max-height: 580px;
+  background: #1e1e2e;
+  color: #cdd6f4;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  overflow: hidden;
+}
+
+/* ── Header ─────────────────────────────────────────── */
+.header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: #181825;
+  border-bottom: 1px solid #313244;
+  flex-shrink: 0;
+}
+
+.logo {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+}
+
+.header-title {
+  flex: 1;
+  text-align: center;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+/* ── Buttons ─────────────────────────────────────────── */
+.btn-primary {
+  background: #89b4fa;
+  color: #1e1e2e;
+  border: none;
+  border-radius: 5px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.btn-primary:hover:not(:disabled) {
+  background: #aac8fd;
+}
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-text {
+  background: none;
+  border: none;
+  color: #89b4fa;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0;
+  flex-shrink: 0;
+}
+.btn-text:hover {
+  color: #aac8fd;
+}
+
+/* ── Script list ─────────────────────────────────────── */
+.script-list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.empty {
+  padding: 28px 16px;
+  text-align: center;
+  color: #585b70;
+  font-size: 12px;
+}
+
+.script-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+  border-bottom: 1px solid #313244;
+  transition: background 0.1s;
+}
+.script-item:last-child {
+  border-bottom: none;
+}
+.script-item:hover {
+  background: #24243e;
+}
+
+/* Toggle pill */
+.toggle {
+  position: relative;
+  flex-shrink: 0;
+  width: 30px;
+  height: 17px;
+  border-radius: 9px;
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.toggle.on  { background: #a6e3a1; }
+.toggle.off { background: #45475a; }
+
+.toggle::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #fff;
+  transition: left 0.15s;
+}
+.toggle.on::after  { left: 16px; }
+.toggle.off::after { left: 3px;  }
+
+.script-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.script-item.disabled .script-name {
+  color: #585b70;
+}
+
+.actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.action-btn {
+  background: #313244;
+  color: #cdd6f4;
+  border: none;
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.action-btn:hover {
+  background: #45475a;
+}
+.action-btn.danger {
+  color: #f38ba8;
+}
+
+/* ── Editor view ─────────────────────────────────────── */
+.editor {
+  flex: 1;
+  width: 100%;
+  min-height: 420px;
+  background: #11111b;
+  color: #cdd6f4;
+  border: none;
+  padding: 12px 14px;
+  font-family: ui-monospace, 'Cascadia Code', 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 12px;
+  line-height: 1.65;
+  resize: none;
+  outline: none;
+  tab-size: 2;
+}
