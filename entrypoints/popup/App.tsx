@@ -12,12 +12,31 @@ export default function App() {
   const [editorCode, setEditorCode] = useState('');
   const [saving, setSaving] = useState(false);
   const [maxRetries, setMaxRetries] = useState(3);
+  const [bridgeConnected, setBridgeConnected] = useState<boolean | null>(null);
 
   useEffect(() => {
     scriptsItem.getValue().then(setScripts);
     settingsItem.getValue().then(s => setMaxRetries(s.maxRetries));
     const unwatch = scriptsItem.watch(val => setScripts(val ?? []));
-    return unwatch;
+
+    // Query current bridge state, then watch for live changes.
+    browser.runtime.sendMessage({ type: 'get_bridge_status' })
+      .then((res: unknown) => {
+        setBridgeConnected((res as { connected: boolean } | null)?.connected ?? false);
+      })
+      .catch(() => setBridgeConnected(false));
+
+    const onBridgeMessage = (msg: unknown) => {
+      if (msg && typeof msg === 'object' && (msg as { type?: string }).type === 'bridge_status') {
+        setBridgeConnected((msg as { connected: boolean }).connected);
+      }
+    };
+    browser.runtime.onMessage.addListener(onBridgeMessage);
+
+    return () => {
+      unwatch();
+      browser.runtime.onMessage.removeListener(onBridgeMessage);
+    };
   }, []);
 
   async function saveMaxRetries(value: number) {
@@ -93,6 +112,10 @@ export default function App() {
     <div className="app">
       <header className="header">
         <span className="logo">🐒 OpenMonkey</span>
+        <span className={`bridge-badge${bridgeConnected === true ? ' bridge-badge--on' : ' bridge-badge--off'}`}>
+          <span className="bridge-badge__dot" />
+          MCP {bridgeConnected === true ? 'connected' : 'disconnected'}
+        </span>
         <button className="btn-primary" onClick={() => openEditor()}>
           + New
         </button>
