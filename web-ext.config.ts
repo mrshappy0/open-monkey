@@ -9,4 +9,9 @@ import { defineWebExtConfig } from 'wxt';
 //   • Developer mode toggle and pinned extension stay set after first run
 export default defineWebExtConfig({
   chromiumArgs: ['--user-data-dir=./.wxt/chrome-data'],
+  // Auto-open useful pages for testing on `pnpm dev`
+  startUrls: [
+    'https://en.wikipedia.org/wiki/Special:Random', // good reading mode target
+    'https://www.bbc.com/news',                     // another reading mode target
+  ],
 });

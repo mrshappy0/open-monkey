@@ -2,61 +2,50 @@ import { parseMeta } from '../utils/meta-parser';
 import { matchesPattern } from '../utils/match-pattern';
 import { scriptsItem, settingsItem } from '../utils/storage';
 import { logger } from '../utils/logger';
+import testBannerCode from '../dev-scripts/test-banner.user.js?raw';
+import readingModeCode from '../dev-scripts/reading-mode.user.js?raw';
 
 const SKIP_SCHEMES = ['chrome://', 'chrome-extension://', 'about:', 'edge://'];
 
 // ---------------------------------------------------------------------------
-// Seed script — always present, cannot be accidentally removed on first load
+// Built-in scripts — seeded on first load, idempotent by fixed ID.
+// devOnly: true  → only added during `pnpm dev` (import.meta.env.DEV)
+// devOnly: false → added in both dev and production builds
 // ---------------------------------------------------------------------------
 
-const SEED_SCRIPT_ID = 'openmonkey-builtin-test-banner';
+interface BuiltinScript {
+  id: string;
+  name: string;
+  code: string;
+  devOnly: boolean;
+}
 
-const SEED_SCRIPT_CODE = `\
-// ==UserScript==
-// @name         OpenMonkey - Test Banner (All Pages)
-// @description  Shows a banner on every page to confirm script injection is working
-// @match        *://*/*
-// @run-at       document-end
-// ==/UserScript==
+const BUILTIN_SCRIPTS: BuiltinScript[] = [
+  {
+    id: 'openmonkey-builtin-reading-mode',
+    name: 'Reading Mode — Distraction-Free Reader',
+    code: readingModeCode,
+    devOnly: false,
+  },
+  {
+    id: 'openmonkey-builtin-test-banner',
+    name: 'OpenMonkey - Test Banner (All Pages)',
+    code: testBannerCode,
+    devOnly: true,
+  },
+];
 
-(function () {
-  function inject() {
-    if (document.getElementById('__om_test_banner__')) return;
-    const target = document.body || document.documentElement;
-    if (!target) return;
-    const banner = document.createElement('div');
-    banner.id = '__om_test_banner__';
-    banner.textContent = '✅ OpenMonkey is working on this page!';
-    Object.assign(banner.style, {
-      position: 'fixed', top: '0', left: '0', width: '100%',
-      padding: '12px', background: '#e00', color: '#fff',
-      fontSize: '18px', fontWeight: 'bold', textAlign: 'center',
-      zIndex: '2147483647', boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
-      cursor: 'pointer',
-    });
-    banner.addEventListener('click', () => banner.remove());
-    target.appendChild(banner);
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', inject);
-  } else {
-    inject();
-  }
-})();`;
-
-async function ensureSeedScript(): Promise<void> {
+async function ensureBuiltinScripts(): Promise<void> {
   const scripts = await scriptsItem.getValue();
-  if (scripts.some(s => s.id === SEED_SCRIPT_ID)) return;
-  await scriptsItem.setValue([
-    {
-      id: SEED_SCRIPT_ID,
-      name: 'OpenMonkey - Test Banner (All Pages)',
-      enabled: true,
-      code: SEED_SCRIPT_CODE,
-    },
-    ...scripts,
-  ]);
+  const existingIds = new Set(scripts.map(s => s.id));
+
+  const toAdd = BUILTIN_SCRIPTS
+    .filter(b => !b.devOnly || import.meta.env.DEV)
+    .filter(b => !existingIds.has(b.id))
+    .map(b => ({ id: b.id, name: b.name, enabled: true, code: b.code }));
+
+  if (toAdd.length === 0) return;
+  await scriptsItem.setValue([...toAdd, ...scripts]);
 }
 
 // ---------------------------------------------------------------------------
@@ -250,8 +239,8 @@ export default defineBackground(() => {
   // Silently retries every few seconds; no-op when native-host isn't active.
   connectBridge();
 
-  // Ensure the built-in test banner script is always present in storage.
-  ensureSeedScript().catch((err: unknown) => logger.warn('ensureSeedScript failed:', err));
+  // Ensure built-in scripts are present in storage on every worker startup.
+  ensureBuiltinScripts().catch((err: unknown) => logger.warn('ensureBuiltinScripts failed:', err));
 
   // Let the popup query the current bridge state on demand.
   browser.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
