@@ -242,10 +242,42 @@ export default defineBackground(() => {
   // Ensure built-in scripts are present in storage on every worker startup.
   ensureBuiltinScripts().catch((err: unknown) => logger.warn('ensureBuiltinScripts failed:', err));
 
-  // Let the popup query the current bridge state on demand.
+  // Let the popup query the current bridge state, and handle script toggle reloads.
   browser.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-    if ((msg as { type?: string } | null)?.type === 'get_bridge_status') {
+    const m = msg as { type?: string; id?: string } | null;
+    if (m?.type === 'get_bridge_status') {
       sendResponse({ connected: ws?.readyState === WebSocket.OPEN });
+      return;
+    }
+    if (m?.type === 'script_toggled' && m.id) {
+      const scriptId = m.id;
+      // Reload the active tab if the toggled script's @match covers it.
+      Promise.all([
+        scriptsItem.getValue(),
+        browser.tabs.query({ active: true, lastFocusedWindow: true }),
+      ]).then(([scripts, [tab]]) => {
+        const url = tab?.url;
+        if (!url || !tab?.id || SKIP_SCHEMES.some(s => url.startsWith(s))) return;
+        const script = scripts.find(s => s.id === scriptId);
+        if (!script) return;
+        const meta = parseMeta(script.code);
+        if (meta.matches.length > 0 && meta.matches.some(p => matchesPattern(url, p))) {
+          logger.log(`[auto-reload] "${script.name}" toggled, reloading active tab…`);
+          // Clear the retry-guard sessionStorage key for this script so the
+          // reload doesn't count as a retry and hit the max-retries limit.
+          const retryKey = `openmonkey_retries_${scriptId}`;
+          browser.scripting.executeScript({
+            target: { tabId: tab.id! },
+            func: (key: string) => { sessionStorage.removeItem(key); },
+            args: [retryKey],
+          }).catch(() => {})
+            .finally(() => {
+              browser.tabs.reload(tab.id!).catch((err: unknown) =>
+                logger.warn('auto-reload failed:', err),
+              );
+            });
+        }
+      }).catch(() => {});
     }
   });
 

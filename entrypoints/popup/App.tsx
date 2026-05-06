@@ -77,6 +77,7 @@ export default function App() {
 
   async function toggleEnabled(id: string) {
     await persist(scripts.map(s => (s.id === id ? { ...s, enabled: !s.enabled } : s)));
+    browser.runtime.sendMessage({ type: 'script_toggled', id }).catch(() => {});
   }
 
   async function deleteScript(id: string) {
