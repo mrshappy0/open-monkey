@@ -5,8 +5,7 @@
   "version": "0.0.0",
   "type": "module",
   "bin": {
-    "openmonkey": "./native-host/dist/index.js",
-    "openmonkey-mcp": "./native-host/dist/index.js"
+    "openmonkey": "./native-host/dist/index.js"
   },
   "files": [
     "native-host/dist"
