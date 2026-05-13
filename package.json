@@ -2,7 +2,7 @@
   "name": "openmonkey",
   "description": "Lightweight, privacy-respecting userscript manager Chrome extension",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "bin": {
     "openmonkey": "./native-host/dist/index.js"
@@ -19,7 +19,7 @@
     "zip:firefox": "wxt zip -b firefox",
     "compile": "tsc --noEmit",
     "prepare": "tsc -p tsconfig.mcp.json && node --input-type=module -e \"import{readFileSync,writeFileSync}from'fs';const f='native-host/dist/index.js';writeFileSync(f,'#!/usr/bin/env node\\n'+readFileSync(f,'utf8'));\"\n",
-    "postinstall": "wxt prepare"
+    "postinstall": "node -e \"if(process.env.npm_config_global||!process.env.INIT_CWD||process.env.INIT_CWD===process.cwd())process.exit(0)\" || wxt prepare"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",
