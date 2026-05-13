@@ -4,6 +4,12 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "bin": {
+    "openmonkey-mcp": "./native-host/dist/index.js"
+  },
+  "files": [
+    "native-host/dist"
+  ],
   "scripts": {
     "dev": "wxt",
     "dev:firefox": "wxt -b firefox",
@@ -12,6 +18,7 @@
     "zip": "wxt zip",
     "zip:firefox": "wxt zip -b firefox",
     "compile": "tsc --noEmit",
+    "prepare": "tsc -p tsconfig.mcp.json && node --input-type=module -e \"import{readFileSync,writeFileSync}from'fs';const f='native-host/dist/index.js';writeFileSync(f,'#!/usr/bin/env node\\n'+readFileSync(f,'utf8'));\"\n",
     "postinstall": "wxt prepare"
   },
   "dependencies": {
@@ -24,6 +31,7 @@
   },
   "devDependencies": {
     "@types/chrome": "^0.1.40",
+    "@types/node": "^22.0.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@types/ws": "^8.5.14",
