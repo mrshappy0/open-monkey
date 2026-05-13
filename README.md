@@ -47,7 +47,14 @@ pnpm build
 
 # 4. Load into Chrome
 # Open chrome://extensions → Enable "Developer mode" → "Load unpacked" → select .output/chrome-mv3/
+
+# 5. Enable "Allow User Scripts"  ← REQUIRED or userscripts will not run
+# chrome://extensions → OpenMonkey → Details → scroll down → "Allow User Scripts" → ON
+# (per-extension Chrome toggle, completely separate from "Developer mode")
 ```
+
+> [!WARNING]
+> **Scripts will NOT run without step 5.** Chrome 135+ requires a per-extension "Allow User Scripts" opt-in before the `chrome.userScripts` API is available. The extension installs fine and the popup works, but nothing will be injected into any page until you flip that toggle. It does **not** enable itself automatically — you must set it once after loading unpacked.
 
 For live development with hot-reload:
 
@@ -150,23 +157,19 @@ The `background.ts` service worker listens to `browser.tabs.onUpdated`. On each 
 3. Match the tab URL against `@match` / `@exclude` patterns
 4. Check `@run-at` against the current navigation phase (`loading` → `document-start`, `complete` → `document-end`)
 5. Wrap the script body in a `sessionStorage`-based retry guard (if `maxRetries > 0`)
-6. Inject via `chrome.scripting.executeScript` with `world: "MAIN"` — full DOM access, same context as page JS
+6. Inject via `chrome.userScripts.execute()` into the `USER_SCRIPT` world — Chrome's dedicated sandbox for userscripts, with full DOM access
 
 ```ts
-// Scripts run in the page's own JS context, not the extension sandbox
-await chrome.scripting.executeScript({
+// Scripts run in Chrome's USER_SCRIPT world.
+// Requires Chrome 135+ and the per-extension "Allow User Scripts" toggle (see Installation).
+await chrome.userScripts.execute({
   target: { tabId },
-  func: (code: string) => {
-    const el = Object.assign(document.createElement('script'), { textContent: code });
-    document.head.append(el);
-    el.remove();
-  },
-  args: [codeToInject],
-  world: 'MAIN',
+  js: [{ code: codeToInject }],
+  world: 'USER_SCRIPT',
 });
 ```
 
-This approach mirrors how Tampermonkey injects scripts and gives your userscripts the same DOM access they'd have in any other manager.
+The `USER_SCRIPT` world is Chrome's dedicated sandbox for userscripts — separate from the page's JS context and the extension context. CSP for this world is set to `''` so eval and dynamic code work. If `chrome.userScripts` is unavailable (pre-Chrome 135, or the per-extension toggle is off), the background worker logs a warning and skips all injection silently.
 
 ---
 
@@ -215,6 +218,61 @@ pnpm zip
 # TypeScript type check
 pnpm compile
 ```
+
+---
+
+## MCP / Copilot Integration
+
+OpenMonkey includes an MCP (Model Context Protocol) server that bridges VS Code Copilot agents directly to your running Chrome extension. This lets Copilot read, create, edit, and delete your userscripts — and inspect the active browser tab — without any manual copy-paste.
+
+### Architecture
+
+```
+VS Code Copilot  →  MCP stdio  →  native-host/index.ts  →  WebSocket (ws://127.0.0.1:7331)  →  background.ts
+```
+
+The native host is a Node.js process launched by `npx`. It hosts a WebSocket server on port 7331. The extension's background service worker connects to it on startup and reconnects automatically on drop.
+
+### Setup
+
+Add this to your VS Code MCP config (`~/Library/Application Support/Code/User/mcp.json` on macOS, `%APPDATA%\Code\User\mcp.json` on Windows):
+
+```json
+{
+  "mcpServers": {
+    "openmonkey": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "github:mrshappy0/open-monkey"]
+    }
+  }
+}
+```
+
+No install required — `npx` fetches and runs the prebuilt server from GitHub.
+
+### Available Tools
+
+| Tool | What it does |
+|---|---|
+| `list_scripts` | List all scripts with IDs, names, enabled state |
+| `get_script` | Get full source of a script by ID |
+| `create_script` | Create a new userscript (code must include `==UserScript==` header) |
+| `update_script` | Replace source of an existing script by ID |
+| `delete_script` | Permanently delete a script by ID |
+| `get_active_tab` | Get the URL and title of the active Chrome tab |
+| `get_page_content` | Get the `innerText` of the active tab's body |
+| `execute_script` | Run JavaScript in the active tab's MAIN world and return the result |
+
+### Relevant Files
+
+| File | Purpose |
+|---|---|
+| `native-host/index.ts` | MCP server + WebSocket bridge source |
+| `native-host/dist/index.js` | Compiled output — **committed to git**, run directly by npx |
+| `tsconfig.mcp.json` | TypeScript config for native-host (NodeNext, emits to `native-host/dist/`) |
+
+After editing `native-host/index.ts`, run `pnpm prepare` to recompile and re-shebang the dist, then commit `native-host/dist/index.js`.
 
 ---
 

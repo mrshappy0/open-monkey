@@ -25,6 +25,8 @@ import { z } from 'zod';
 
 const WS_PORT = 7331;
 const REQUEST_TIMEOUT_MS = 10_000;
+const CONNECT_WAIT_MS = 25_000;
+const CONNECT_POLL_MS = 500;
 
 // ---------------------------------------------------------------------------
 // WebSocket bridge — the extension connects here
@@ -71,31 +73,39 @@ wss.on('connection', (socket) => {
 
 /**
  * Send a command to the extension and wait for its response.
- * Rejects if the extension is not connected or if the request times out.
+ * If the extension is not yet connected, waits up to CONNECT_WAIT_MS for it
+ * to wake up (the service worker keep-alive alarm fires every ~20s).
  */
 function send<T>(type: string, payload?: unknown): Promise<T> {
   return new Promise((resolve, reject) => {
-    if (!extensionSocket || extensionSocket.readyState !== WebSocket.OPEN) {
-      reject(new Error(
-        'OpenMonkey extension is not connected. ' +
-        'Make sure the extension is loaded and active in Chrome, ' +
-        'then navigate to any page to wake the service worker.',
-      ));
-      return;
+    const deadline = Date.now() + CONNECT_WAIT_MS;
+
+    function attempt() {
+      if (extensionSocket && extensionSocket.readyState === WebSocket.OPEN) {
+        const id = crypto.randomUUID();
+        const timer = setTimeout(() => {
+          pending.delete(id);
+          reject(new Error(`Request "${type}" timed out after ${REQUEST_TIMEOUT_MS / 1000}s`));
+        }, REQUEST_TIMEOUT_MS);
+
+        pending.set(id, {
+          resolve: (v) => { clearTimeout(timer); resolve(v as T); },
+          reject:  (e) => { clearTimeout(timer); reject(e); },
+        });
+
+        extensionSocket.send(JSON.stringify({ id, type, payload }));
+      } else if (Date.now() < deadline) {
+        setTimeout(attempt, CONNECT_POLL_MS);
+      } else {
+        reject(new Error(
+          'OpenMonkey extension is not connected. ' +
+          'Make sure the extension is loaded and active in Chrome, ' +
+          'then navigate to any page to wake the service worker.',
+        ));
+      }
     }
 
-    const id = crypto.randomUUID();
-    const timer = setTimeout(() => {
-      pending.delete(id);
-      reject(new Error(`Request "${type}" timed out after ${REQUEST_TIMEOUT_MS / 1000}s`));
-    }, REQUEST_TIMEOUT_MS);
-
-    pending.set(id, {
-      resolve: (v) => { clearTimeout(timer); resolve(v as T); },
-      reject:  (e) => { clearTimeout(timer); reject(e); },
-    });
-
-    extensionSocket.send(JSON.stringify({ id, type, payload }));
+    attempt();
   });
 }
 

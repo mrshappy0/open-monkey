@@ -235,6 +235,13 @@ function getUserScriptsApi(): any | null {
 export default defineBackground(() => {
   logger.log('background loaded');
 
+  // Keep-alive alarm — fires every 20s to prevent the service worker from
+  // going inactive while the MCP bridge needs a persistent connection.
+  browser.alarms.create('openmonkey-keepalive', { periodInMinutes: 1 / 3 });
+  browser.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name === 'openmonkey-keepalive') connectBridge();
+  });
+
   // Start the MCP bridge — connects to native-host WebSocket if it's running.
   // Silently retries every few seconds; no-op when native-host isn't active.
   connectBridge();

@@ -27,6 +27,8 @@ OpenMonkey is a privacy-first, open-source userscript manager built as a Chrome/
 | **pnpm** | Package manager. Never use npm or yarn. |
 | **`@wxt-dev/storage`** | Typed, versioned wrapper around `chrome.storage.local` |
 | **Vite** | Bundler — managed by WXT, do not configure Vite directly unless WXT exposes it |
+| **`@modelcontextprotocol/sdk`** | MCP server in `native-host/` — bridges VS Code Copilot to the extension |
+| **`ws`** | WebSocket library for the MCP ↔ extension bridge (port 7331) |
 
 ---
 
@@ -232,9 +234,58 @@ OpenMonkey parses standard Greasemonkey-compatible `==UserScript==` headers. The
 
 ---
 
+## Script Injection — chrome.userScripts API
+
+> **"Allow User Scripts" must be enabled per-extension.**
+> `chrome://extensions` → OpenMonkey → **Details** → enable **"Allow User Scripts"**.
+> Scripts will NOT run without this. The extension loads and the popup works, but all injection is silently skipped.
+
+OpenMonkey injects scripts via `chrome.userScripts.execute()` (Chrome 135+) into the `USER_SCRIPT` world. This is **not** `chrome.scripting.executeScript`.
+
+Key facts for agents:
+- The `getUserScriptsApi()` helper in `background.ts` feature-detects the API. If unavailable, it logs a warning and returns early — do NOT add a fallback injection path.
+- `world: 'USER_SCRIPT'` is sandboxed from both the page and the extension context.
+- `userScriptsApi.configureWorld({ csp: '' })` is called on startup to allow eval/Function in injected scripts.
+- The `"userScripts"` permission must be in `wxt.config.ts` manifest permissions.
+- The `"alarms"` permission is also present — used for a keep-alive heartbeat that reconnects the MCP WebSocket bridge if it drops.
+
+Do NOT suggest using `chrome.scripting.executeScript` with a script-tag injection pattern — that was the old approach and is no longer used.
+
+---
+
+## MCP Native Host
+
+OpenMonkey includes a Node.js MCP server that bridges VS Code Copilot to the running Chrome extension.
+
+### Architecture
+
+```
+VS Code Copilot → MCP stdio → native-host/index.ts → WebSocket ws://127.0.0.1:7331 → background.ts
+```
+
+### Files
+
+| File | Purpose |
+|---|---|
+| `native-host/index.ts` | MCP StdioServerTransport + WebSocketServer source |
+| `native-host/dist/index.js` | Compiled output — **committed to git** (not gitignored), run directly by npx |
+| `tsconfig.mcp.json` | Separate TS config (NodeNext module resolution, emits to `native-host/dist/`) |
+
+### Tools Exposed
+`list_scripts`, `get_script`, `create_script`, `update_script`, `delete_script`, `get_active_tab`, `get_page_content`, `execute_script`
+
+### Key Rules for Agents
+- After editing `native-host/index.ts`, always run `pnpm prepare` to recompile. Then commit `native-host/dist/index.js`.
+- `native-host/dist/` is **NOT** in `.gitignore` — the compiled file must be committed so npx can run it without a build step.
+- The `send()` function polls up to 25 s for the extension WS to connect (handles service worker cold-start delay).
+- Do NOT add remote fetching or telemetry to the native host.
+- VS Code MCP config entry: `{ "type": "stdio", "command": "npx", "args": ["-y", "github:mrshappy0/open-monkey"] }`
+
+---
+
 ## Security
 
-- Scripts are injected into the page's **MAIN world** via `chrome.scripting.executeScript` with a dynamically created `<script>` tag. This is intentional — it gives userscripts the same DOM access as Tampermonkey.
+- Scripts are injected via `chrome.userScripts.execute()` into the **USER_SCRIPT world** — Chrome's dedicated sandbox for userscripts. This requires the `"userScripts"` manifest permission AND the per-extension **"Allow User Scripts"** toggle in `chrome://extensions` → Details. Do NOT fall back to `chrome.scripting.executeScript` for userscript injection.
 - The retry guard (`sessionStorage`) prevents scripts from causing infinite reloads or lockouts
 - Never suggest storing credentials in `chrome.storage.sync` — sync means Google's servers. `chrome.storage.local` only, and warn users that plaintext credential storage is only appropriate for LAN/local services not exposed to the internet
 - Do not add `web_accessible_resources` entries unless strictly required — minimize extension attack surface

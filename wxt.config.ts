@@ -5,7 +5,7 @@ export default defineConfig({
   manifest: {
     name: 'OpenMonkey',
     description: 'Lightweight, privacy-respecting userscript manager. Self-hosted, never published to the store.',
-    permissions: ['scripting', 'storage', 'tabs', 'userScripts'],
+    permissions: ['scripting', 'storage', 'tabs', 'userScripts', 'alarms'],
     host_permissions: ['<all_urls>'],
   },
 });
