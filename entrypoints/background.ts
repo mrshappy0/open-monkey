@@ -4,6 +4,7 @@ import { scriptsItem, settingsItem } from '../utils/storage';
 import { logger } from '../utils/logger';
 import testBannerCode from '../dev-scripts/test-banner.user.js?raw';
 import readingModeCode from '../dev-scripts/reading-mode.user.js?raw';
+import askPageCode from '../dev-scripts/ask-page.user.js?raw';
 
 const SKIP_SCHEMES = ['chrome://', 'chrome-extension://', 'about:', 'edge://'];
 
@@ -32,6 +33,12 @@ const BUILTIN_SCRIPTS: BuiltinScript[] = [
     name: 'OpenMonkey - Test Banner (All Pages)',
     code: testBannerCode,
     devOnly: true,
+  },
+  {
+    id: 'openmonkey-builtin-ask-page',
+    name: 'Ask AI — Page Q&A (Ollama)',
+    code: askPageCode,
+    devOnly: false,
   },
 ];
 

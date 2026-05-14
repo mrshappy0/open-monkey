@@ -38,11 +38,30 @@ const pending = new Map<string, {
   reject: (e: Error) => void;
 }>();
 
-const wss = new WebSocketServer({ port: WS_PORT, host: '127.0.0.1' });
+async function createWss(maxRetries = 4, delayMs = 1500): Promise<WebSocketServer> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await new Promise<WebSocketServer>((resolve, reject) => {
+        const w = new WebSocketServer({ port: WS_PORT, host: '127.0.0.1' });
+        w.once('listening', () => resolve(w));
+        w.once('error', reject);
+      });
+    } catch (err: unknown) {
+      const e = err as NodeJS.ErrnoException;
+      if (e.code === 'EADDRINUSE' && attempt < maxRetries) {
+        console.error(`[OpenMonkey] Port ${WS_PORT} in use — retrying in ${delayMs}ms (${attempt + 1}/${maxRetries})…`);
+        await new Promise(r => setTimeout(r, delayMs));
+      } else {
+        throw err;
+      }
+    }
+  }
+  throw new Error('unreachable');
+}
 
-wss.on('listening', () => {
-  console.error(`[OpenMonkey] Bridge listening on ws://127.0.0.1:${WS_PORT}`);
-});
+const wss = await createWss();
+console.error(`[OpenMonkey] Bridge listening on ws://127.0.0.1:${WS_PORT}`);
+wss.on('error', (err) => console.error('[OpenMonkey] WSS error:', err));
 
 wss.on('connection', (socket) => {
   console.error('[OpenMonkey] Extension connected');
