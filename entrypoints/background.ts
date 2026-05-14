@@ -198,6 +198,55 @@ async function handleBridgeMessage(msg: BridgeMessage): Promise<void> {
   }
 }
 
+// ---------------------------------------------------------------------------
+// ask-proxy — CORS-free fetch proxy for the ask-page userscript
+// ---------------------------------------------------------------------------
+
+interface AskProxyRequest {
+  type: 'request';
+  id: string;
+  endpoint: string;
+  apiKey: string;
+  model: string;
+  messages: Array<{ role: string; content: string }>;
+}
+
+async function streamChatProxy(
+  req: AskProxyRequest,
+  signal: AbortSignal,
+  onToken: (content: string) => void,
+): Promise<void> {
+  const url = req.endpoint.replace(/\/$/, '') + '/v1/chat/completions';
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${req.apiKey}`,
+    },
+    body: JSON.stringify({ model: req.model, messages: req.messages, stream: true }),
+    signal,
+  });
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '');
+    throw new Error(`API ${res.status}: ${txt.slice(0, 200)}`);
+  }
+  const reader = res.body!.getReader();
+  const dec = new TextDecoder();
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    for (const line of dec.decode(value, { stream: true }).split('\n')) {
+      const t = line.trim();
+      if (!t || t === 'data: [DONE]' || !t.startsWith('data: ')) continue;
+      try {
+        const obj = JSON.parse(t.slice(6)) as { choices?: Array<{ delta?: { content?: string } }> };
+        const tok = obj.choices?.[0]?.delta?.content;
+        if (tok) onToken(tok);
+      } catch { /* ignore malformed lines */ }
+    }
+  }
+}
+
 /**
  * Wraps a userscript's body in a sessionStorage-based retry guard so a
  * misbehaving script that triggers reloads can't lock a tab into a loop.
@@ -293,6 +342,33 @@ export default defineBackground(() => {
         }
       }).catch(() => {});
     }
+  });
+
+  // Ask-proxy port — each connection handles one streaming API request.
+  browser.runtime.onConnect.addListener((port) => {
+    if (port.name !== 'ask-proxy') return;
+    let abortCtrl: AbortController | null = null;
+    port.onMessage.addListener((msg: AskProxyRequest | { type: 'abort' }) => {
+      if (msg.type === 'request') {
+        abortCtrl = new AbortController();
+        streamChatProxy(msg as AskProxyRequest, abortCtrl.signal, (content) => {
+          port.postMessage({ type: 'token', content });
+        }).then(() => {
+          port.postMessage({ type: 'done' });
+        }).catch((err: unknown) => {
+          if (err instanceof Error && err.name === 'AbortError') {
+            port.postMessage({ type: 'done' });
+          } else {
+            port.postMessage({ type: 'error', message: err instanceof Error ? err.message : String(err) });
+          }
+        });
+      } else if (msg.type === 'abort') {
+        abortCtrl?.abort();
+      }
+    });
+    port.onDisconnect.addListener(() => {
+      abortCtrl?.abort();
+    });
   });
 
   const userScriptsApi = getUserScriptsApi();

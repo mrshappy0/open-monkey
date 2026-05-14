@@ -74,33 +74,46 @@
     }
   }
 
-  async function streamChat(endpoint, apiKey, model, msgs, signal, onToken) {
-    const url = endpoint.replace(/\/$/, '') + '/v1/chat/completions';
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({ model, messages: msgs, stream: true }),
-      signal,
-    });
-    if (!res.ok) {
-      const txt = await res.text().catch(() => '');
-      throw new Error(`API ${res.status}: ${txt.slice(0, 200)}`);
-    }
-    const reader = res.body.getReader();
-    const dec = new TextDecoder();
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      for (const line of dec.decode(value, { stream: true }).split('\n')) {
-        const t = line.trim();
-        if (!t || t === 'data: [DONE]' || !t.startsWith('data: ')) continue;
-        try {
-          const obj = JSON.parse(t.slice(6));
-          const tok = obj.choices?.[0]?.delta?.content;
-          if (tok) onToken(tok);
-        } catch { /* ignore malformed lines */ }
+  // streamChat routes through the ask-proxy content script → background service
+  // worker, which makes the cross-origin fetch without CORS restrictions.
+  function streamChat(endpoint, apiKey, model, msgs, signal, onToken) {
+    return new Promise((resolve, reject) => {
+      const id = Math.random().toString(36).slice(2) + Date.now().toString(36);
+
+      function onTokenEvt(e) {
+        if (e.detail.id !== id) return;
+        onToken(e.detail.content);
       }
-    }
+      function onDoneEvt(e) {
+        if (e.detail.id !== id) return;
+        cleanup();
+        resolve();
+      }
+      function onErrorEvt(e) {
+        if (e.detail.id !== id) return;
+        cleanup();
+        reject(new Error(e.detail.message));
+      }
+      function cleanup() {
+        window.removeEventListener('om-ask-token', onTokenEvt);
+        window.removeEventListener('om-ask-done', onDoneEvt);
+        window.removeEventListener('om-ask-error', onErrorEvt);
+      }
+
+      window.addEventListener('om-ask-token', onTokenEvt);
+      window.addEventListener('om-ask-done', onDoneEvt);
+      window.addEventListener('om-ask-error', onErrorEvt);
+
+      signal.addEventListener('abort', () => {
+        window.dispatchEvent(new CustomEvent('om-ask-abort', { detail: { id } }));
+        cleanup();
+        reject(new DOMException('Aborted', 'AbortError'));
+      });
+
+      window.dispatchEvent(new CustomEvent('om-ask-request', {
+        detail: { id, endpoint, apiKey, model, messages: msgs },
+      }));
+    });
   }
 
   // ── Shadow DOM host ─────────────────────────────────────────────────────
