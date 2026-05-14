@@ -1,0 +1,5 @@
+# Normalize line endings
+* text=auto
+
+# Force LF for compiled output written by Node (avoids CRLF dirty-working-tree on Windows)
+native-host/dist/*.js text eol=lf
