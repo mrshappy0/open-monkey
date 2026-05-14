@@ -306,46 +306,50 @@ export default defineBackground(() => {
   }
 
   browser.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
-    const url = tab.url;
-    if (!url || SKIP_SCHEMES.some(s => url.startsWith(s))) return;
+    try {
+      const url = tab.url;
+      if (!url || SKIP_SCHEMES.some(s => url.startsWith(s))) return;
 
-    const eventRunAt =
-      changeInfo.status === 'loading' ? 'document-start'
-      : changeInfo.status === 'complete' ? 'document-end'
-      : null;
-    if (!eventRunAt) return;
+      const eventRunAt =
+        changeInfo.status === 'loading' ? 'document-start'
+        : changeInfo.status === 'complete' ? 'document-end'
+        : null;
+      if (!eventRunAt) return;
 
-    const [scripts, settings] = await Promise.all([
-      scriptsItem.getValue(),
-      settingsItem.getValue(),
-    ]);
+      const [scripts, settings] = await Promise.all([
+        scriptsItem.getValue(),
+        settingsItem.getValue(),
+      ]);
 
-    for (const script of scripts) {
-      if (!script.enabled) continue;
+      for (const script of scripts) {
+        if (!script.enabled) continue;
 
-      const meta = parseMeta(script.code);
-      if (!meta.matches.length) continue;
+        const meta = parseMeta(script.code);
+        if (!meta.matches.length) continue;
 
-      // document-idle is treated like document-end (after DOMContentLoaded).
-      const targetRunAt = meta.runAt === 'document-idle' ? 'document-end' : meta.runAt;
-      if (targetRunAt !== eventRunAt) continue;
+        // document-idle is treated like document-end (after DOMContentLoaded).
+        const targetRunAt = meta.runAt === 'document-idle' ? 'document-end' : meta.runAt;
+        if (targetRunAt !== eventRunAt) continue;
 
-      if (!meta.matches.some(p => matchesPattern(url, p))) continue;
-      if (meta.excludes.some(p => matchesPattern(url, p))) continue;
+        if (!meta.matches.some(p => matchesPattern(url, p))) continue;
+        if (meta.excludes.some(p => matchesPattern(url, p))) continue;
 
-      const maxRetries = meta.maxRetries ?? settings.maxRetries;
-      const code = wrapWithRetryGuard(script.code, script.id, script.name, maxRetries);
+        const maxRetries = meta.maxRetries ?? settings.maxRetries;
+        const code = wrapWithRetryGuard(script.code, script.id, script.name, maxRetries);
 
-      try {
-        await userScriptsApi.execute({
-          target: { tabId },
-          js: [{ code }],
-          world: 'USER_SCRIPT',
-        });
-        logger.log(`injected "${script.name}" → ${url}`);
-      } catch (err) {
-        logger.error(`failed to inject "${script.name}":`, err);
+        try {
+          await userScriptsApi.execute({
+            target: { tabId },
+            js: [{ code }],
+            world: 'USER_SCRIPT',
+          });
+          logger.log(`injected "${script.name}" → ${url}`);
+        } catch (err) {
+          logger.error(`failed to inject "${script.name}":`, err);
+        }
       }
+    } catch (err) {
+      logger.warn('tabs.onUpdated handler error:', err);
     }
   });
 });

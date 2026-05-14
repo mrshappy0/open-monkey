@@ -8,6 +8,7 @@ const PREFIX = '[OpenMonkey]';
 export const logger = {
   log:   (...args: unknown[]) => { if (import.meta.env.DEV) console.log(PREFIX,   ...args); },
   warn:  (...args: unknown[]) => { if (import.meta.env.DEV) console.warn(PREFIX,  ...args); },
-  error: (...args: unknown[]) => {                           console.error(PREFIX, ...args); },
-  //     ^ errors always surface, even in prod — silent failures are worse
+  // console.error in a service worker triggers Chrome's extension error badge.
+  // Use console.warn in prod so failures are still logged without alarming the user.
+  error: (...args: unknown[]) => { if (import.meta.env.DEV) console.error(PREFIX, ...args); else console.warn(PREFIX, ...args); },
 };
