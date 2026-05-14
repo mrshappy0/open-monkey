@@ -1,6 +1,6 @@
 // ==UserScript==
-// @name         Ask AI — Page Q&A (Ollama)
-// @description  Floating button on every page — type a question and get an AI answer using the full page content as context, powered by a local Ollama model.
+// @name         Ask AI — Page Q&A
+// @description  Floating button on every page — ask AI about the current page. Supports Ollama (local) and any OpenAI-compatible API (GitHub Copilot, OpenAI, etc.).
 // @match        *://*/*
 // @run-at       document-end
 // @version      1.0.0
@@ -12,8 +12,18 @@
   const OLLAMA_BASE = 'http://localhost:11434';
   const HOST_ID = 'om-ask-host';
   const MAX_PAGE_CHARS = 8000;
+  const LS_KEY = 'om-ask-cfg';
 
   if (document.getElementById(HOST_ID)) return;
+
+  // ── Config helpers ──────────────────────────────────────────────────────
+
+  function loadCfg() {
+    try { return JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch { return {}; }
+  }
+  function saveCfg(patch) {
+    localStorage.setItem(LS_KEY, JSON.stringify({ ...loadCfg(), ...patch }));
+  }
 
   // ── Page text extraction ────────────────────────────────────────────────
 
@@ -59,6 +69,35 @@
         try {
           const obj = JSON.parse(line);
           if (obj.response) onToken(obj.response);
+        } catch { /* ignore malformed lines */ }
+      }
+    }
+  }
+
+  async function streamChat(endpoint, apiKey, model, msgs, signal, onToken) {
+    const url = endpoint.replace(/\/$/, '') + '/v1/chat/completions';
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({ model, messages: msgs, stream: true }),
+      signal,
+    });
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '');
+      throw new Error(`API ${res.status}: ${txt.slice(0, 200)}`);
+    }
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      for (const line of dec.decode(value, { stream: true }).split('\n')) {
+        const t = line.trim();
+        if (!t || t === 'data: [DONE]' || !t.startsWith('data: ')) continue;
+        try {
+          const obj = JSON.parse(t.slice(6));
+          const tok = obj.choices?.[0]?.delta?.content;
+          if (tok) onToken(tok);
         } catch { /* ignore malformed lines */ }
       }
     }
@@ -159,6 +198,39 @@
     }
     #send:hover { background: #2ea043; }
     #send:disabled { background: #21262d; color: #484f58; cursor: not-allowed; }
+
+    #gear-btn {
+      background: none; border: none; color: #8b949e; font-size: 15px; padding: 2px 6px;
+      border-radius: 4px; transition: color .15s; flex-shrink: 0;
+    }
+    #gear-btn:hover { color: #e6edf3; }
+    #gear-btn.active { color: #58a6ff; }
+    #api-badge {
+      background: #161b22; border: 1px solid #30363d; border-radius: 6px;
+      color: #8b949e; font-size: 11px; padding: 3px 8px; white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis; max-width: 130px; display: none;
+    }
+    #settings-panel {
+      padding: 12px 14px; border-bottom: 1px solid #21262d;
+      display: none; flex-direction: column; gap: 10px; flex-shrink: 0;
+    }
+    #settings-panel.open { display: flex; }
+    .srow { display: flex; flex-direction: column; gap: 4px; }
+    .slabel { font-size: 11px; color: #8b949e; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+    .prov-row { display: flex; gap: 6px; }
+    .prov-btn {
+      flex: 1; padding: 5px 8px; border: 1px solid #30363d; border-radius: 6px;
+      background: #161b22; color: #8b949e; font-size: 12px; font-weight: 600; transition: all .15s;
+    }
+    .prov-btn.active { border-color: #58a6ff; color: #58a6ff; background: rgba(88,166,255,.08); }
+    .sinput {
+      background: #161b22; border: 1px solid #30363d; border-radius: 6px;
+      color: #e6edf3; font-size: 12px; padding: 5px 8px; outline: none; width: 100%; font-family: inherit;
+    }
+    .sinput:focus { border-color: #58a6ff; }
+    .sinput::placeholder { color: #484f58; }
+    .api-fields { display: none; flex-direction: column; gap: 10px; }
+    .api-fields.visible { display: flex; }
   `;
   shadow.appendChild(css);
 
@@ -186,12 +258,90 @@
   modelSelect.id = 'model-select';
   modelSelect.innerHTML = '<option value="">Loading…</option>';
   header.appendChild(modelSelect);
+  const apiBadge = document.createElement('span');
+  apiBadge.id = 'api-badge';
+  header.appendChild(apiBadge);
+  const gearBtn = document.createElement('button');
+  gearBtn.id = 'gear-btn';
+  gearBtn.textContent = '⚙';
+  gearBtn.title = 'Settings';
+  header.appendChild(gearBtn);
   panel.appendChild(header);
+
+  // Settings panel
+  const settingsPanel = document.createElement('div');
+  settingsPanel.id = 'settings-panel';
+
+  const provRow = document.createElement('div');
+  provRow.className = 'srow';
+  const provLabel = document.createElement('div');
+  provLabel.className = 'slabel';
+  provLabel.textContent = 'Provider';
+  const provBtns = document.createElement('div');
+  provBtns.className = 'prov-row';
+  const ollamaBtn = document.createElement('button');
+  ollamaBtn.className = 'prov-btn';
+  ollamaBtn.dataset.prov = 'ollama';
+  ollamaBtn.textContent = 'Ollama (local)';
+  const apiProvBtn = document.createElement('button');
+  apiProvBtn.className = 'prov-btn';
+  apiProvBtn.dataset.prov = 'api';
+  apiProvBtn.textContent = 'OpenAI-compatible';
+  provBtns.appendChild(ollamaBtn);
+  provBtns.appendChild(apiProvBtn);
+  provRow.appendChild(provLabel);
+  provRow.appendChild(provBtns);
+  settingsPanel.appendChild(provRow);
+
+  const apiFields = document.createElement('div');
+  apiFields.className = 'api-fields';
+
+  const endpointRow = document.createElement('div');
+  endpointRow.className = 'srow';
+  const endpointLabel = document.createElement('div');
+  endpointLabel.className = 'slabel';
+  endpointLabel.textContent = 'Endpoint';
+  const endpointInput = document.createElement('input');
+  endpointInput.className = 'sinput';
+  endpointInput.placeholder = 'https://api.githubcopilot.com';
+  endpointInput.type = 'url';
+  endpointRow.appendChild(endpointLabel);
+  endpointRow.appendChild(endpointInput);
+  apiFields.appendChild(endpointRow);
+
+  const keyRow = document.createElement('div');
+  keyRow.className = 'srow';
+  const keyLabel = document.createElement('div');
+  keyLabel.className = 'slabel';
+  keyLabel.textContent = 'API Key';
+  const keyInput = document.createElement('input');
+  keyInput.className = 'sinput';
+  keyInput.placeholder = 'Bearer token / API key';
+  keyInput.type = 'password';
+  keyRow.appendChild(keyLabel);
+  keyRow.appendChild(keyInput);
+  apiFields.appendChild(keyRow);
+
+  const apiModelRow = document.createElement('div');
+  apiModelRow.className = 'srow';
+  const apiModelLabel = document.createElement('div');
+  apiModelLabel.className = 'slabel';
+  apiModelLabel.textContent = 'Model';
+  const apiModelInput = document.createElement('input');
+  apiModelInput.className = 'sinput';
+  apiModelInput.placeholder = 'gpt-4o, claude-opus-4-5, …';
+  apiModelInput.type = 'text';
+  apiModelRow.appendChild(apiModelLabel);
+  apiModelRow.appendChild(apiModelInput);
+  apiFields.appendChild(apiModelRow);
+
+  settingsPanel.appendChild(apiFields);
+  panel.appendChild(settingsPanel);
 
   // Messages
   const messages = document.createElement('div');
   messages.id = 'messages';
-  const hintEl = makeMsg('hint', null, 'Ask anything about this page — the full content is included as context. Requires Ollama running locally (ollama serve).');
+  const hintEl = makeMsg('hint', null, 'Ask anything about this page — the full content is included as context. Supports Ollama (local) and any OpenAI-compatible API.');
   messages.appendChild(hintEl[0]);
   panel.appendChild(messages);
 
@@ -211,6 +361,26 @@
   panel.appendChild(inputRow);
 
   shadow.appendChild(panel);
+
+  // ── Provider / settings helpers ─────────────────────────────────────────
+
+  function applyProvider(prov) {
+    const isApi = prov === 'api';
+    modelSelect.style.display = isApi ? 'none' : '';
+    apiBadge.style.display = isApi ? '' : 'none';
+    ollamaBtn.classList.toggle('active', !isApi);
+    apiProvBtn.classList.toggle('active', isApi);
+    apiFields.classList.toggle('visible', isApi);
+    if (isApi) apiBadge.textContent = loadCfg().apiModel || 'API';
+  }
+
+  (function initSettings() {
+    const cfg = loadCfg();
+    endpointInput.value = cfg.apiEndpoint || '';
+    keyInput.value = cfg.apiKey || '';
+    apiModelInput.value = cfg.apiModel || '';
+    applyProvider(cfg.provider || 'ollama');
+  })();
 
   // ── Load models ──────────────────────────────────────────────────────────
 
@@ -234,6 +404,39 @@
     if (panelOpen) setTimeout(() => qInput.focus(), 160);
   });
 
+  // ── Settings logic ──────────────────────────────────────────────────────
+
+  gearBtn.addEventListener('click', () => {
+    const isOpen = settingsPanel.classList.toggle('open');
+    gearBtn.classList.toggle('active', isOpen);
+  });
+
+  [ollamaBtn, apiProvBtn].forEach(btn => {
+    btn.addEventListener('click', () => {
+      const prov = btn.dataset.prov;
+      saveCfg({ provider: prov });
+      applyProvider(prov);
+    });
+  });
+
+  function saveApiFields() {
+    saveCfg({
+      apiEndpoint: endpointInput.value.trim(),
+      apiKey: keyInput.value.trim(),
+      apiModel: apiModelInput.value.trim(),
+    });
+    apiBadge.textContent = apiModelInput.value.trim() || 'API';
+  }
+  endpointInput.addEventListener('change', saveApiFields);
+  keyInput.addEventListener('change', saveApiFields);
+  apiModelInput.addEventListener('change', saveApiFields);
+
+  [endpointInput, keyInput, apiModelInput].forEach(el => {
+    el.addEventListener('keydown', e => e.stopPropagation());
+    el.addEventListener('keyup', e => e.stopPropagation());
+    el.addEventListener('keypress', e => e.stopPropagation());
+  });
+
   // ── Auto-resize textarea ─────────────────────────────────────────────────
 
   qInput.addEventListener('input', () => {
@@ -243,6 +446,11 @@
   });
 
   // ── Send ─────────────────────────────────────────────────────────────────
+
+  // Stop keyboard events from bubbling to the page (prevents page shortcuts like GitHub's 's')
+  qInput.addEventListener('keydown', e => e.stopPropagation());
+  qInput.addEventListener('keyup', e => e.stopPropagation());
+  qInput.addEventListener('keypress', e => e.stopPropagation());
 
   qInput.addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -258,9 +466,21 @@
     const question = qInput.value.trim();
     if (!question) return;
 
-    const model = modelSelect.value;
+    const cfg = loadCfg();
+    const isApi = cfg.provider === 'api';
+    const model = isApi ? cfg.apiModel : modelSelect.value;
+
     if (!model) {
-      const [el] = makeMsg('error', null, 'No model selected. Is Ollama running? Try: ollama serve');
+      const msg = isApi
+        ? 'No model configured. Open ⚙ settings and enter a model name.'
+        : 'No model selected. Is Ollama running? Try: ollama serve';
+      const [el] = makeMsg('error', null, msg);
+      messages.appendChild(el);
+      messages.scrollTop = messages.scrollHeight;
+      return;
+    }
+    if (isApi && !cfg.apiEndpoint) {
+      const [el] = makeMsg('error', null, 'No API endpoint configured. Open ⚙ settings.');
       messages.appendChild(el);
       messages.scrollTop = messages.scrollHeight;
       return;
@@ -274,17 +494,13 @@
     messages.appendChild(userEl);
 
     const pageText = extractPageText();
-    const prompt = [
+    const systemContent = [
       'You are a helpful assistant. The user is reading a webpage and asks a question about it.',
       `Page title: ${document.title}`,
       `Page URL: ${location.href}`,
       '',
       'Page content:',
       pageText,
-      '',
-      '---',
-      '',
-      `User: ${question}`,
       '',
       "Answer concisely and accurately based on the page content. If the answer isn't in the content, say so briefly.",
     ].join('\n');
@@ -301,18 +517,29 @@
 
     try {
       let resp = '';
-      await streamGenerate(model, prompt, abortCtrl.signal, token => {
+      const onToken = token => {
         resp += token;
         aiText.textContent = resp;
         aiText.appendChild(cursor);
         messages.scrollTop = messages.scrollHeight;
-      });
+      };
+      if (isApi) {
+        await streamChat(
+          cfg.apiEndpoint, cfg.apiKey, model,
+          [{ role: 'system', content: systemContent }, { role: 'user', content: question }],
+          abortCtrl.signal, onToken
+        );
+      } else {
+        const prompt = `${systemContent}\n\n---\n\nUser: ${question}\n`;
+        await streamGenerate(model, prompt, abortCtrl.signal, onToken);
+      }
       cursor.remove();
     } catch (err) {
       cursor.remove();
       if (err.name !== 'AbortError') {
         aiText.className = 'msg-text error';
-        aiText.textContent = `Error: ${err.message}. Make sure Ollama is running (ollama serve).`;
+        aiText.textContent = `Error: ${err.message}`;
+        if (!isApi) aiText.textContent += '. Make sure Ollama is running (ollama serve).';
       }
     } finally {
       sendBtn.disabled = false;
