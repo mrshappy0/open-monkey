@@ -31,8 +31,8 @@ importers:
         specifier: ^0.1.40
         version: 0.1.40
       '@types/node':
-        specifier: ^22.0.0
-        version: 22.19.19
+        specifier: ^25.7.0
+        version: 25.8.0
       '@types/react':
         specifier: ^19.2.14
         version: 19.2.14
@@ -44,7 +44,7 @@ importers:
         version: 8.18.1
       '@wxt-dev/module-react':
         specifier: ^1.2.2
-        version: 1.2.2(vite@8.0.13(@types/node@22.19.19)(esbuild@0.27.7)(jiti@2.7.0)(tsx@4.21.0))(wxt@0.20.26(@types/node@22.19.19)(jiti@2.7.0)(rolldown@1.0.1)(rollup@4.59.0)(tsx@4.21.0))
+        version: 1.2.2(vite@8.0.13(@types/node@25.8.0)(esbuild@0.27.7)(jiti@2.7.0)(tsx@4.21.0))(wxt@0.20.26(@types/node@25.8.0)(jiti@2.7.0)(rolldown@1.0.1)(rollup@4.59.0)(tsx@4.21.0))
       tsx:
         specifier: ^4.19.4
         version: 4.21.0
@@ -53,7 +53,7 @@ importers:
         version: 6.0.3
       wxt:
         specifier: ^0.20.26
-        version: 0.20.26(@types/node@22.19.19)(jiti@2.7.0)(rolldown@1.0.1)(rollup@4.59.0)(tsx@4.21.0)
+        version: 0.20.26(@types/node@25.8.0)(jiti@2.7.0)(rolldown@1.0.1)(rollup@4.59.0)(tsx@4.21.0)
 
 packages:
 
@@ -589,8 +589,8 @@ packages:
   '@types/minimatch@3.0.5':
     resolution: {integrity: sha512-Klz949h02Gz2uZCMGwDUSDS1YBlTdDDgbWHi+81l29tQALUtvz4rAYi5uoVhE5Lagoq6DeqAUlbrHvW/mXDgdQ==}
 
-  '@types/node@22.19.19':
-    resolution: {integrity: sha512-dyh/xO2Fh5bYrfWaaqGrRQQGkNdmYw6AmaAUvYeUMNTWQtvb796ikLdmTchRmOlOiIJ1TDXfWgVx1QkUlQ6Hew==}
+  '@types/node@25.8.0':
+    resolution: {integrity: sha512-TCFSk8IZh+iLX1xtksoBVtdmgL+1IX0fC9BeU4QqFSuNdN/K+HUlhqOzEmSYYpZUVsLYcPqc9KX+60iDuninSQ==}
 
   '@types/react-dom@19.2.3':
     resolution: {integrity: sha512-jp2L/eY6fn+KgVVQAOqYItbF0VY/YApe5Mz2F0aykSO8gx31bYCZyvSeYxCHKvzHG5eZjc+zyaS5BrBWya2+kQ==}
@@ -2073,8 +2073,8 @@ packages:
   uhyphen@0.2.0:
     resolution: {integrity: sha512-qz3o9CHXmJJPGBdqzab7qAYuW8kQGKNEuoHFYrBwV6hWIMcpAmxDLXojcHfFr9US1Pe6zUswEIJIbLI610fuqA==}
 
-  undici-types@6.21.0:
-    resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
+  undici-types@7.24.6:
+    resolution: {integrity: sha512-WRNW+sJgj5OBN4/0JpHFqtqzhpbnV0GuB+OozA9gCL7a993SmU+1JBZCzLNxYsbMfIeDL+lTsphD5jN5N+n0zg==}
 
   unimport@6.3.0:
     resolution: {integrity: sha512-M+Dxk5W9WRd+8j56W9tp8lGW/dmMc7g5zj7BWQnEjKQhryBstqsi1V0izb0zHwSkEN8cSYV7K75/bykairV2tA==}
@@ -2643,9 +2643,9 @@ snapshots:
 
   '@types/minimatch@3.0.5': {}
 
-  '@types/node@22.19.19':
+  '@types/node@25.8.0':
     dependencies:
-      undici-types: 6.21.0
+      undici-types: 7.24.6
 
   '@types/react-dom@19.2.3(@types/react@19.2.14)':
     dependencies:
@@ -2657,12 +2657,12 @@ snapshots:
 
   '@types/ws@8.18.1':
     dependencies:
-      '@types/node': 22.19.19
+      '@types/node': 25.8.0
 
-  '@vitejs/plugin-react@6.0.1(vite@8.0.13(@types/node@22.19.19)(esbuild@0.27.7)(jiti@2.7.0)(tsx@4.21.0))':
+  '@vitejs/plugin-react@6.0.1(vite@8.0.13(@types/node@25.8.0)(esbuild@0.27.7)(jiti@2.7.0)(tsx@4.21.0))':
     dependencies:
       '@rolldown/pluginutils': 1.0.0-rc.7
-      vite: 8.0.13(@types/node@22.19.19)(esbuild@0.27.7)(jiti@2.7.0)(tsx@4.21.0)
+      vite: 8.0.13(@types/node@25.8.0)(esbuild@0.27.7)(jiti@2.7.0)(tsx@4.21.0)
 
   '@webext-core/fake-browser@1.3.4':
     dependencies:
@@ -2684,11 +2684,11 @@ snapshots:
       '@types/filesystem': 0.0.36
       '@types/har-format': 1.2.16
 
-  '@wxt-dev/module-react@1.2.2(vite@8.0.13(@types/node@22.19.19)(esbuild@0.27.7)(jiti@2.7.0)(tsx@4.21.0))(wxt@0.20.26(@types/node@22.19.19)(jiti@2.7.0)(rolldown@1.0.1)(rollup@4.59.0)(tsx@4.21.0))':
+  '@wxt-dev/module-react@1.2.2(vite@8.0.13(@types/node@25.8.0)(esbuild@0.27.7)(jiti@2.7.0)(tsx@4.21.0))(wxt@0.20.26(@types/node@25.8.0)(jiti@2.7.0)(rolldown@1.0.1)(rollup@4.59.0)(tsx@4.21.0))':
     dependencies:
-      '@vitejs/plugin-react': 6.0.1(vite@8.0.13(@types/node@22.19.19)(esbuild@0.27.7)(jiti@2.7.0)(tsx@4.21.0))
-      vite: 8.0.13(@types/node@22.19.19)(esbuild@0.27.7)(jiti@2.7.0)(tsx@4.21.0)
-      wxt: 0.20.26(@types/node@22.19.19)(jiti@2.7.0)(rolldown@1.0.1)(rollup@4.59.0)(tsx@4.21.0)
+      '@vitejs/plugin-react': 6.0.1(vite@8.0.13(@types/node@25.8.0)(esbuild@0.27.7)(jiti@2.7.0)(tsx@4.21.0))
+      vite: 8.0.13(@types/node@25.8.0)(esbuild@0.27.7)(jiti@2.7.0)(tsx@4.21.0)
+      wxt: 0.20.26(@types/node@25.8.0)(jiti@2.7.0)(rolldown@1.0.1)(rollup@4.59.0)(tsx@4.21.0)
     transitivePeerDependencies:
       - '@rolldown/plugin-babel'
       - babel-plugin-react-compiler
@@ -2841,7 +2841,7 @@ snapshots:
 
   chrome-launcher@1.2.0:
     dependencies:
-      '@types/node': 22.19.19
+      '@types/node': 25.8.0
       escape-string-regexp: 4.0.0
       is-wsl: 2.2.0
       lighthouse-logger: 2.0.2
@@ -4119,7 +4119,7 @@ snapshots:
 
   uhyphen@0.2.0: {}
 
-  undici-types@6.21.0: {}
+  undici-types@7.24.6: {}
 
   unimport@6.3.0(rolldown@1.0.1):
     dependencies:
@@ -4174,13 +4174,13 @@ snapshots:
 
   vary@1.1.2: {}
 
-  vite-node@6.0.0(@types/node@22.19.19)(esbuild@0.27.7)(jiti@2.7.0)(tsx@4.21.0):
+  vite-node@6.0.0(@types/node@25.8.0)(esbuild@0.27.7)(jiti@2.7.0)(tsx@4.21.0):
     dependencies:
       cac: 7.0.0
       es-module-lexer: 2.1.0
       obug: 2.1.1
       pathe: 2.0.3
-      vite: 8.0.13(@types/node@22.19.19)(esbuild@0.27.7)(jiti@2.7.0)(tsx@4.21.0)
+      vite: 8.0.13(@types/node@25.8.0)(esbuild@0.27.7)(jiti@2.7.0)(tsx@4.21.0)
     transitivePeerDependencies:
       - '@types/node'
       - '@vitejs/devtools'
@@ -4195,7 +4195,7 @@ snapshots:
       - tsx
       - yaml
 
-  vite@8.0.13(@types/node@22.19.19)(esbuild@0.27.7)(jiti@2.7.0)(tsx@4.21.0):
+  vite@8.0.13(@types/node@25.8.0)(esbuild@0.27.7)(jiti@2.7.0)(tsx@4.21.0):
     dependencies:
       lightningcss: 1.32.0
       picomatch: 4.0.4
@@ -4203,7 +4203,7 @@ snapshots:
       rolldown: 1.0.1
       tinyglobby: 0.2.16
     optionalDependencies:
-      '@types/node': 22.19.19
+      '@types/node': 25.8.0
       esbuild: 0.27.7
       fsevents: 2.3.3
       jiti: 2.7.0
@@ -4287,7 +4287,7 @@ snapshots:
       is-wsl: 3.1.1
       powershell-utils: 0.1.0
 
-  wxt@0.20.26(@types/node@22.19.19)(jiti@2.7.0)(rolldown@1.0.1)(rollup@4.59.0)(tsx@4.21.0):
+  wxt@0.20.26(@types/node@25.8.0)(jiti@2.7.0)(rolldown@1.0.1)(rollup@4.59.0)(tsx@4.21.0):
     dependencies:
       '@1natsu/wait-element': 4.2.0
       '@aklinker1/rollup-plugin-visualizer': 5.12.0(rollup@4.59.0)
@@ -4328,8 +4328,8 @@ snapshots:
       scule: 1.3.0
       tinyglobby: 0.2.16
       unimport: 6.3.0(rolldown@1.0.1)
-      vite: 8.0.13(@types/node@22.19.19)(esbuild@0.27.7)(jiti@2.7.0)(tsx@4.21.0)
-      vite-node: 6.0.0(@types/node@22.19.19)(esbuild@0.27.7)(jiti@2.7.0)(tsx@4.21.0)
+      vite: 8.0.13(@types/node@25.8.0)(esbuild@0.27.7)(jiti@2.7.0)(tsx@4.21.0)
+      vite-node: 6.0.0(@types/node@25.8.0)(esbuild@0.27.7)(jiti@2.7.0)(tsx@4.21.0)
       web-ext-run: 0.2.4
     transitivePeerDependencies:
       - '@types/node'
