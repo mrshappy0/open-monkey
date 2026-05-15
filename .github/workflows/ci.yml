@@ -8,6 +8,9 @@ jobs:
   commitlint:
     name: Lint commits
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -24,6 +27,8 @@ jobs:
   check:
     name: Type-check, lint & build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

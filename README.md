@@ -190,6 +190,57 @@ The `USER_SCRIPT` world is Chrome's dedicated sandbox for userscripts — separa
 
 ---
 
+## Persistent Script Storage — GM_* API
+
+Every userscript automatically has access to a set of persistent-storage functions, injected as a preamble by OpenMonkey. No imports or boilerplate needed — just call them directly.
+
+```js
+// Available in every userscript — auto-injected, no import needed
+
+const value = await GM_getValue('key', 'default');       // read (with fallback)
+await GM_setValue('key', 'value');                       // write (resolves after storage write completes)
+await GM_setValue('apiKey', 'sk-...', true);             // write as secret (masked in popup)
+await GM_setValues({ key1: 'a', apiKey: 'sk-...' }, ['apiKey']); // atomic multi-write
+await GM_deleteValue('key');                             // delete one key
+const keys = await GM_listValues();                      // list all keys in this script's namespace
+```
+
+### Namespace isolation
+
+Every script's data is stored under its own namespace (the script's ID). **Scripts cannot read or write another script's data.** This is intentional — it prevents a malicious script from exfiltrating secrets (e.g. API keys) set by a trusted script. There is no global cross-script storage.
+
+### How It Works
+
+| Layer | What it does |
+|---|---|
+| `background.ts` | Injects GM_* preamble before your script runs in the `USER_SCRIPT` world |
+| `script-bridge.content.ts` | Handles `om-store-*` window events, reads/writes `chrome.storage.local` |
+| `utils/storage.ts` `scriptStoreItem` | Typed `chrome.storage.local` item — all script data under `local:script-store` |
+
+Keys are automatically namespaced to your script's ID. You cannot accidentally read another script's data.
+
+### Script Data in the Popup
+
+The **Script Data** view (footer of the main popup) shows all stored values grouped by script name. It supports full CRUD:
+
+- **View** — all keys and values listed, grouped by script; script names shown (not raw UUIDs)
+- **Pre-populate** — `+ Add to…` dropdown at the top lets you add data for any installed script, even before it has ever run
+- **Create** — click `+ Add` on any script's row to add a key to that namespace
+- **Edit** — click a value or the ✎ button to edit inline; press Enter to save
+- **Delete** — click ✕ next to any entry
+- **Reveal secrets** — 👁 button temporarily reveals masked values
+- **Delete script** — removing a script from the script list also wipes all its stored variables
+
+### `GM_setValues` vs. multiple `GM_setValue` calls
+
+Use `GM_setValues` when writing more than one key at once. Multiple separate `GM_setValue` calls run concurrently and can overwrite each other (read-merge-write race). `GM_setValues` does a single atomic read-merge-write.
+
+### Writes are properly awaitable
+
+`GM_setValue`, `GM_setValues`, and `GM_deleteValue` all return Promises that resolve **after** the `chrome.storage.local` write completes (via an ack event from `script-bridge.content.ts`). It is safe to `await GM_setValue(...)` and then immediately `await GM_getValue(...)` — the read will always see the written value.
+
+---
+
 ## Storage
 
 All data lives in `chrome.storage.local`. Nothing is ever synced or sent anywhere.

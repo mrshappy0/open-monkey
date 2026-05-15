@@ -240,3 +240,177 @@
   outline: none;
   tab-size: 2;
 }
+
+/* ── Script Data store view ──────────────────────────── */
+.store-list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.store-ns {
+  border-bottom: 1px solid #313244;
+}
+.store-ns:last-child {
+  border-bottom: none;
+}
+
+.store-ns-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 14px 5px;
+  background: #181825;
+  position: sticky;
+  top: 0;
+}
+
+.store-ns-name {
+  font-size: 11px;
+  font-weight: 700;
+  color: #89b4fa;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.store-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border-top: 1px solid #313244;
+}
+.store-entry:hover {
+  background: #24243e;
+}
+
+.store-key {
+  font-size: 12px;
+  color: #a6adc8;
+  flex-shrink: 0;
+  width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.store-value {
+  flex: 1;
+  font-size: 12px;
+  color: #cdd6f4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, 'Cascadia Code', monospace;
+}
+.store-value--masked {
+  color: #585b70;
+  letter-spacing: 0.12em;
+}
+
+.store-add-btn {
+  background: none;
+  border: none;
+  color: #89b4fa;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 1px 4px;
+  flex-shrink: 0;
+}
+.store-add-btn:hover {
+  color: #aac8fd;
+}
+
+.store-script-select {
+  background: #313244;
+  border: 1px solid #45475a;
+  border-radius: 4px;
+  color: #89b4fa;
+  font-size: 11px;
+  padding: 2px 6px;
+  cursor: pointer;
+  outline: none;
+  max-width: 130px;
+}
+.store-script-select:focus {
+  border-color: #89b4fa;
+}
+
+.store-edit-input {
+  flex: 1;
+  background: #313244;
+  border: 1px solid #45475a;
+  border-radius: 4px;
+  color: #cdd6f4;
+  font-size: 12px;
+  padding: 2px 6px;
+  outline: none;
+  font-family: ui-monospace, 'Cascadia Code', monospace;
+  min-width: 0;
+}
+.store-edit-input:focus {
+  border-color: #89b4fa;
+}
+
+.store-new-key {
+  width: 80px;
+  flex-shrink: 0;
+  background: #313244;
+  border: 1px solid #45475a;
+  border-radius: 4px;
+  color: #a6adc8;
+  font-size: 12px;
+  padding: 2px 6px;
+  outline: none;
+  font-family: ui-monospace, 'Cascadia Code', monospace;
+}
+.store-new-key:focus {
+  border-color: #89b4fa;
+}
+
+.store-secret-btn {
+  background: none;
+  border: 1px solid #45475a;
+  border-radius: 4px;
+  color: #585b70;
+  font-size: 11px;
+  padding: 2px 5px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.store-secret-btn.active {
+  color: #f9e2af;
+  border-color: #f9e2af;
+}
+
+.store-add-row {
+  background: #181825;
+}
+
+/* ── Editor toolbar ──────────────────────────────────── */
+.editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  background: #181825;
+  border-bottom: 1px solid #313244;
+  flex-shrink: 0;
+}
+
+.editor-toolbar-label {
+  font-size: 11px;
+  color: #585b70;
+}
+
+.editor-snippet-btn {
+  background: #313244;
+  color: #89b4fa;
+  border: none;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.editor-snippet-btn:hover {
+  background: #45475a;
+}

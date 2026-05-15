@@ -181,11 +181,11 @@ async function handleBridgeMessage(msg: BridgeMessage): Promise<void> {
       const { code } = msg.payload as { code: string };
       const [tab] = await browser.tabs.query({ active: true, lastFocusedWindow: true });
       if (!tab?.id) { reply(null); break; }
-      // Run in MAIN world so the code has full page-context access.
-      // Code is passed as a serialized arg — no eval happens in the service worker.
+      // Run in ISOLATED world (extension context) — not subject to the page's CSP,
+      // so eval works even on pages with strict script-src (e.g. GitHub, Google).
+      // DOM, window, document, and localStorage are all accessible from isolated world.
       const results = await browser.scripting.executeScript({
         target: { tabId: tab.id },
-        world: 'MAIN',
         func: (c: string) => (0, eval)(c),
         args: [code],
       });
@@ -245,6 +245,105 @@ async function streamChatProxy(
       } catch { /* ignore malformed lines */ }
     }
   }
+}
+
+/**
+ * Generates a JS preamble injected into the USER_SCRIPT world before every
+ * script. Exposes GM_getValue, GM_setValue, GM_deleteValue, GM_listValues as
+ * globals, namespaced to the script's ID so stores are isolated per-script.
+ * Script authors never need to write window event boilerplate themselves.
+ */
+function buildGMPreamble(scriptId: string): string {
+  const ns = JSON.stringify(scriptId);
+  return `(function () {
+  var _NS = ${ns};
+  function GM_getValue(key, defaultValue) {
+    return new Promise(function (resolve) {
+      var rid = Math.random().toString(36).slice(2) + Date.now().toString(36);
+      function onResult(e) {
+        if (e.detail.requestId !== rid) return;
+        window.removeEventListener('om-store-value', onResult);
+        resolve(e.detail.value !== undefined ? e.detail.value : defaultValue);
+      }
+      window.addEventListener('om-store-value', onResult);
+      window.dispatchEvent(new CustomEvent('om-store-get', { detail: { requestId: rid, namespace: _NS, key: key } }));
+    });
+  }
+  // secret: true marks the value for masked display (••••••••) in the OpenMonkey
+  // popup Script Data view. It does NOT encrypt the value or prevent page-level
+  // JavaScript from observing it in the window event payload — the USER_SCRIPT
+  // world communicates via window CustomEvents, which are visible to page scripts
+  // on the same origin. Only use secret values on pages you control.
+  function GM_setValue(key, value, secret) {
+    return new Promise(function (resolve) {
+      var rid = Math.random().toString(36).slice(2) + Date.now().toString(36);
+      function onAck(e) {
+        if (e.detail.requestId !== rid) return;
+        window.removeEventListener('om-store-set-ack', onAck);
+        resolve();
+      }
+      window.addEventListener('om-store-set-ack', onAck);
+      window.dispatchEvent(new CustomEvent('om-store-set', {
+        detail: { requestId: rid, namespace: _NS, key: key, value: value, secret: !!secret }
+      }));
+    });
+  }
+  // Atomic multi-key write — pass an object of { key: value } and an optional
+  // array (or function) of keys to mark as secrets (masked in the popup, same
+  // transit-visibility caveat as GM_setValue).
+  function GM_setValues(patch, secretKeys) {
+    return new Promise(function (resolve) {
+      var rid = Math.random().toString(36).slice(2) + Date.now().toString(36);
+      var isSecret = typeof secretKeys === 'function'
+        ? secretKeys
+        : function(k) { return Array.isArray(secretKeys) && secretKeys.indexOf(k) !== -1; };
+      var entries = {};
+      Object.keys(patch).forEach(function(k) {
+        entries[k] = { value: patch[k], secret: !!isSecret(k) };
+      });
+      function onAck(e) {
+        if (e.detail.requestId !== rid) return;
+        window.removeEventListener('om-store-setmany-ack', onAck);
+        resolve();
+      }
+      window.addEventListener('om-store-setmany-ack', onAck);
+      window.dispatchEvent(new CustomEvent('om-store-setmany', {
+        detail: { requestId: rid, namespace: _NS, patch: entries }
+      }));
+    });
+  }
+  function GM_deleteValue(key) {
+    return new Promise(function (resolve) {
+      var rid = Math.random().toString(36).slice(2) + Date.now().toString(36);
+      function onAck(e) {
+        if (e.detail.requestId !== rid) return;
+        window.removeEventListener('om-store-delete-ack', onAck);
+        resolve();
+      }
+      window.addEventListener('om-store-delete-ack', onAck);
+      window.dispatchEvent(new CustomEvent('om-store-delete', {
+        detail: { requestId: rid, namespace: _NS, key: key }
+      }));
+    });
+  }
+  function GM_listValues() {
+    return new Promise(function (resolve) {
+      var rid = Math.random().toString(36).slice(2) + Date.now().toString(36);
+      function onResult(e) {
+        if (e.detail.requestId !== rid) return;
+        window.removeEventListener('om-store-list-result', onResult);
+        resolve(e.detail.keys);
+      }
+      window.addEventListener('om-store-list-result', onResult);
+      window.dispatchEvent(new CustomEvent('om-store-list', { detail: { requestId: rid, namespace: _NS } }));
+    });
+  }
+  globalThis.GM_getValue = GM_getValue;
+  globalThis.GM_setValue = GM_setValue;
+  globalThis.GM_setValues = GM_setValues;
+  globalThis.GM_deleteValue = GM_deleteValue;
+  globalThis.GM_listValues = GM_listValues;
+})();`;
 }
 
 /**
@@ -423,12 +522,13 @@ export default defineBackground(() => {
         if (meta.excludes.some(p => matchesPattern(url, p))) continue;
 
         const maxRetries = meta.maxRetries ?? settings.maxRetries;
+        const preamble = buildGMPreamble(script.id);
         const code = wrapWithRetryGuard(script.code, script.id, script.name, maxRetries);
 
         try {
           await userScriptsApi.execute({
             target: { tabId },
-            js: [{ code }],
+            js: [{ code: preamble }, { code }],
             world: 'USER_SCRIPT',
           });
           logger.log(`injected "${script.name}" → ${url}`);

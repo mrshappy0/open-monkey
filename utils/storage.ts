@@ -22,3 +22,16 @@ export const scriptsItem = storage.defineItem<UserScript[]>('local:scripts', {
   fallback: [],
   version: 1,
 });
+
+export interface ScriptStoreEntry {
+  value: unknown;
+  secret: boolean;
+  updatedAt: number;
+}
+
+export type ScriptStore = Record<string, Record<string, ScriptStoreEntry>>;
+
+export const scriptStoreItem = storage.defineItem<ScriptStore>('local:script-store', {
+  fallback: {},
+  version: 1,
+});
