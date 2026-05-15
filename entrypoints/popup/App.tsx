@@ -440,9 +440,9 @@ export default function App() {
         ))}
       </main>
       {syncError && (
-        <div className="sync-error-banner">
+        <div className="sync-error-banner" role="alert">
           <span>{syncError}</span>
-          <button className="btn-text" onClick={() => setSyncError(null)}>✕</button>
+          <button className="btn-text" aria-label="Dismiss sync error" onClick={() => setSyncError(null)}>✕</button>
         </div>
       )}
       <footer className="settings-footer">
@@ -454,10 +454,12 @@ export default function App() {
             : 'Sync scripts across devices using your Chrome account. Scripts will flow through Google\'s servers.'}
         >
           <button
+            role="switch"
+            aria-checked={syncEnabled}
             className={`toggle ${syncEnabled ? 'on' : 'off'}`}
-            onClick={() => !syncPending && handleSyncToggle(!syncEnabled)}
+            onClick={() => handleSyncToggle(!syncEnabled)}
             aria-label={syncEnabled ? 'Disable sync' : 'Enable sync'}
-            style={syncPending ? { opacity: 0.5, cursor: 'wait' } : undefined}
+            disabled={syncPending}
           />
           <span className="settings-label">Sync</span>
         </label>

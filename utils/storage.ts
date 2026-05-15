@@ -7,7 +7,11 @@ export interface Settings {
 
 export const settingsItem = storage.defineItem<Settings>('local:settings', {
   fallback: { maxRetries: 3, syncEnabled: false },
-  version: 1,
+  version: 2,
+  migrations: {
+    // v1 → v2: backfill syncEnabled (wasn't in the original Settings shape)
+    2: (old: { maxRetries: number }) => ({ ...old, syncEnabled: false }),
+  },
 });
 
 export interface UserScript {

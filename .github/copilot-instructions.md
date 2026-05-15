@@ -11,7 +11,7 @@ OpenMonkey is a privacy-first, open-source userscript manager built as a Chrome/
 ## Core Principles — Non-Negotiable
 
 - **No telemetry. No analytics. No remote config. No phoning home. Ever.**
-- `chrome.storage.local` only — never `chrome.storage.sync`, never IndexedDB, never fetch to an external server
+- `chrome.storage.local` by default — `chrome.storage.sync` is available as an **explicit, opt-in** user toggle only; never use it automatically or as the default. Never use IndexedDB or fetch to an external server.
 - The extension is loaded unpacked. Features that only exist in the store (update_url, auto-update, review prompts) are irrelevant and should never be added
 - Privacy is the product. Do not suggest features that compromise it.
 
@@ -357,7 +357,7 @@ VS Code Copilot → MCP stdio → native-host/index.ts → WebSocket ws://127.0.
 
 - Scripts are injected via `chrome.userScripts.execute()` into the **USER_SCRIPT world** — Chrome's dedicated sandbox for userscripts. This requires the `"userScripts"` manifest permission AND the per-extension **"Allow User Scripts"** toggle in `chrome://extensions` → Details. Do NOT fall back to `chrome.scripting.executeScript` for userscript injection.
 - The retry guard (`sessionStorage`) prevents scripts from causing infinite reloads or lockouts
-- Never suggest storing credentials in `chrome.storage.sync` — sync means Google's servers. `chrome.storage.local` only, and warn users that plaintext credential storage is only appropriate for LAN/local services not exposed to the internet
+- Never suggest storing credentials in `chrome.storage.sync` — sync means Google's servers. Warn users that enabling sync sends script code through Google's servers, and that plaintext credential storage (even in `local`) is only appropriate for LAN/local services not exposed to the internet
 - Do not add `web_accessible_resources` entries unless strictly required — minimize extension attack surface
 - `host_permissions: ['<all_urls>']` is required for cross-origin injection. Do not remove it.
 
@@ -367,7 +367,7 @@ VS Code Copilot → MCP stdio → native-host/index.ts → WebSocket ws://127.0.
 
 - **Do not suggest publishing to the Chrome Web Store or Firefox AMO** — this is against the project's philosophy
 - **Do not add any analytics, crash reporting, or telemetry** — no Sentry, no PostHog, no GA, nothing
-- **Do not use `chrome.storage.sync`** — ever
+- **Do not use `chrome.storage.sync` by default** — it is allowed only as an explicit opt-in user toggle (as implemented in `background.ts`). Never enable it automatically or without user consent.
 - **Do not add auto-update mechanisms** — the user manages updates via git
 - **Do not add remote `@require` fetching without caching** — if added, scripts must be cached locally in storage
 - **Do not use `npm` or `yarn`** — pnpm only
