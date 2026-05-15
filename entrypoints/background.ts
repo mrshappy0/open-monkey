@@ -263,7 +263,7 @@ function buildGMPreamble(scriptId: string): string {
       function onResult(e) {
         if (e.detail.requestId !== rid) return;
         window.removeEventListener('om-store-value', onResult);
-        resolve(e.detail.value !== undefined && e.detail.value !== null ? e.detail.value : defaultValue);
+        resolve(e.detail.value !== undefined ? e.detail.value : defaultValue);
       }
       window.addEventListener('om-store-value', onResult);
       window.dispatchEvent(new CustomEvent('om-store-get', { detail: { requestId: rid, namespace: _NS, key: key } }));

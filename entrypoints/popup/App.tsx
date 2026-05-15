@@ -126,7 +126,7 @@ export default function App() {
   function toggleReveal(entryKey: string) {
     setRevealed(prev => {
       const next = new Set(prev);
-      next.has(entryKey) ? next.delete(entryKey) : next.add(entryKey);
+      if (next.has(entryKey)) { next.delete(entryKey); } else { next.add(entryKey); }
       return next;
     });
   }
@@ -144,11 +144,13 @@ export default function App() {
   }
 
   async function updateStoreEntry(namespace: string, key: string, value: unknown, secret: boolean) {
+    // eslint-disable-next-line react-hooks/purity -- event handler, not called during render
+    const updatedAt = Date.now();
     await scriptStoreItem.setValue({
       ...storeData,
       [namespace]: {
         ...(storeData[namespace] ?? {}),
-        [key]: { value, secret, updatedAt: Date.now() },
+        [key]: { value, secret, updatedAt },
       },
     });
   }
@@ -251,6 +253,7 @@ export default function App() {
                             className="action-btn"
                             onClick={() => toggleReveal(revealKey)}
                             title={isRevealed ? 'Hide' : 'Reveal'}
+                            aria-label={isRevealed ? 'Hide value' : 'Reveal value'}
                           >
                             {isRevealed ? '🙈' : '👁'}
                           </button>

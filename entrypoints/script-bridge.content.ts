@@ -14,12 +14,18 @@
  * Events in:
  *   om-store-getall  { requestId, namespace }
  *   om-store-get     { requestId, namespace, key }
- *   om-store-set     { namespace, key, value, secret? }
- *   om-store-delete  { namespace, key }
+ *   om-store-set     { requestId, namespace, key, value, secret? }
+ *   om-store-setmany { requestId, namespace, patch: Record<string, { value, secret }> }
+ *   om-store-list    { requestId, namespace }
+ *   om-store-delete  { requestId, namespace, key }
  *
  * Events out:
  *   om-store-getall-result  { requestId, data: Record<string, unknown> }
  *   om-store-value          { requestId, value: unknown }
+ *   om-store-list-result    { requestId, keys: string[] }
+ *   om-store-set-ack        { requestId }
+ *   om-store-setmany-ack    { requestId }
+ *   om-store-delete-ack     { requestId }
  */
 
 import { scriptStoreItem } from '../utils/storage';
@@ -48,7 +54,7 @@ export default defineContentScript({
     window.addEventListener('om-store-get', async (e: Event) => {
       const { requestId, namespace, key } = (e as CustomEvent<StoreGetDetail>).detail;
       const store = await scriptStoreItem.getValue();
-      const value = store[namespace]?.[key]?.value ?? undefined;
+      const value = store[namespace]?.[key]?.value;
       window.dispatchEvent(new CustomEvent('om-store-value', { detail: { requestId, value } }));
     });
 
