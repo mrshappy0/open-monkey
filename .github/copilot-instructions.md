@@ -21,10 +21,12 @@ OpenMonkey is a privacy-first, open-source userscript manager built as a Chrome/
 
 | Tool | Version / Notes |
 |---|---|
+| **Node.js** | `22+` — required. Check with `node --version`. Install via [nodejs.org](https://nodejs.org) or `nvm install 22`. |
+| **pnpm** | `11+` — required. Check with `pnpm --version`. Install with `npm install -g pnpm@latest` or `curl -fsSL https://get.pnpm.io/install.sh \| sh -`. Never use npm or yarn. |
+| **Chrome** | `135+` — required for `chrome.userScripts` API. |
 | **WXT** | `^0.20.x` — the extension framework. Everything goes through WXT. |
 | **React** | `^19` — popup UI only |
-| **TypeScript** | Strict mode, everywhere |
-| **pnpm** | Package manager. Never use npm or yarn. |
+| **TypeScript** | `^6` — strict mode, everywhere |
 | **`@wxt-dev/storage`** | Typed, versioned wrapper around `chrome.storage.local` |
 | **Vite** | Bundler — managed by WXT, do not configure Vite directly unless WXT exposes it |
 | **`@modelcontextprotocol/sdk`** | MCP server in `native-host/` — bridges VS Code Copilot to the extension |
@@ -214,12 +216,29 @@ pnpm build            # Production build → .output/chrome-mv3/
 pnpm build:firefox    # Production build → .output/firefox-mv3/
 pnpm zip              # Zip for sideloading/sharing
 pnpm compile          # Type-check only (no emit)
+pnpm lint             # ESLint (flat config, eslint.config.js)
 pnpm postinstall      # Runs `wxt prepare` — auto-run by pnpm after install
 ```
 
 Always use `pnpm`. Never suggest `npm install` or `yarn add`.
 
+**Required versions:** Node.js 22+ and pnpm 11+. If a user hits install or build errors, ask them to run `node --version` and `pnpm --version` first. Old versions are the most common root cause.
+
 After adding or removing dependencies, remind the user to run `pnpm install` and check that `pnpm compile` passes.
+
+## Versioning & Releases
+
+OpenMonkey uses **semantic-release** on merge to `main`. Commit messages must follow **Conventional Commits** (`fix:`, `feat:`, `chore:`, `docs:`, etc.) — commitlint enforces this in CI.
+
+- Every push/PR runs: commitlint → `pnpm compile` → `pnpm lint` → `pnpm build`
+- Every merge to `main` also runs semantic-release: bumps `package.json` version, generates `CHANGELOG.md`, builds the zip, and publishes a GitHub Release with the zip attached
+- The `[skip ci]` tag in semantic-release's version-bump commit prevents a release loop
+
+## Updating OpenMonkey (for users and developers)
+
+**Download users** (no build toolchain): download the latest zip from the [Releases page](https://github.com/mrshappy0/open-monkey/releases), replace the existing folder contents, click the reload icon on OpenMonkey in `chrome://extensions`.
+
+**Developer workflow** (cloned repo): `git pull && pnpm install && pnpm build`, then click the reload icon on OpenMonkey in `chrome://extensions`. Chrome does not auto-reload unpacked extensions — the one manual reload click is always required.
 
 ---
 

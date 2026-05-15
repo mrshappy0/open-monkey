@@ -278,9 +278,14 @@ function wrapWithRetryGuard(code: string, scriptId: string, scriptName: string, 
  *  - Per-extension "Allow User Scripts" toggle ON in chrome://extensions
  *    (under the extension's Details page — separate from global Dev Mode)
  */
-function getUserScriptsApi(): any | null {
+interface UserScriptsApi {
+  execute: (options: object) => Promise<void>;
+  configureWorld: (options: object) => Promise<void>;
+}
+
+function getUserScriptsApi(): UserScriptsApi | null {
   try {
-    const api = (globalThis as any).chrome?.userScripts;
+    const api = (globalThis as unknown as { chrome?: { userScripts?: UserScriptsApi } }).chrome?.userScripts;
     if (api && typeof api.execute === 'function') return api;
   } catch {
     // Property access throws when the per-extension toggle is off.

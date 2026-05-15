@@ -34,9 +34,25 @@ OpenMonkey is a lightweight, open-source browser extension for running userscrip
 
 OpenMonkey is intentionally **not on the Chrome Web Store**. That's the point.
 
+### Option A — Download a release (no build toolchain needed)
+
+1. Go to the [Releases page](https://github.com/mrshappy0/open-monkey/releases) and download the latest `.zip`
+2. Unzip it to a permanent folder on your machine
+3. Open `chrome://extensions` → enable **Developer mode** → **Load unpacked** → select that folder
+4. `chrome://extensions` → OpenMonkey → **Details** → **Allow User Scripts** → ON ← _required_
+
+To update: download the new release zip, replace the folder contents, click the reload icon on OpenMonkey in `chrome://extensions`.
+
+### Option B — Clone and build (developers)
+
+**Prerequisites:**
+- **Node.js 22+** — check with `node --version`. Install via [nodejs.org](https://nodejs.org) or `nvm install 22 && nvm use 22`.
+- **pnpm 11+** — check with `pnpm --version`. Install with `npm install -g pnpm@latest` or `curl -fsSL https://get.pnpm.io/install.sh | sh -`.
+- **Chrome 135+** — required for the `chrome.userScripts` API. Check `chrome://settings/help`.
+
 ```bash
 # 1. Clone the repo
-git clone https://github.com/your-username/open-monkey.git
+git clone https://github.com/mrshappy0/open-monkey.git
 cd open-monkey
 
 # 2. Install dependencies
@@ -50,8 +66,9 @@ pnpm build
 
 # 5. Enable "Allow User Scripts"  ← REQUIRED or userscripts will not run
 # chrome://extensions → OpenMonkey → Details → scroll down → "Allow User Scripts" → ON
-# (per-extension Chrome toggle, completely separate from "Developer mode")
 ```
+
+To update: `git pull && pnpm install && pnpm build`, then click the reload icon on OpenMonkey in `chrome://extensions`.
 
 > [!WARNING]
 > **Scripts will NOT run without step 5.** Chrome 135+ requires a per-extension "Allow User Scripts" opt-in before the `chrome.userScripts` API is available. The extension installs fine and the popup works, but nothing will be injected into any page until you flip that toggle. It does **not** enable itself automatically — you must set it once after loading unpacked.
