@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/mrshappy0/open-monkey/compare/v1.0.0...v1.1.0) (2026-05-15)
+
+
+### Features
+
+* general-purpose script store with GM_getValue/GM_setValues API ([#12](https://github.com/mrshappy0/open-monkey/issues/12)) ([9f5f22d](https://github.com/mrshappy0/open-monkey/commit/9f5f22d654a17d99d7ddca71255a47bed86b89d7))
+
 # 1.0.0 (2026-05-15)
 
 
