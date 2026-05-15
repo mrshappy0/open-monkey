@@ -32,6 +32,7 @@ jobs:
           node-version: 22
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
+      - run: pnpm exec wxt prepare
       - run: pnpm compile
       - run: pnpm lint
       - run: pnpm build

@@ -47,7 +47,7 @@ To update: download the new release zip, replace the folder contents, click the 
 
 **Prerequisites:**
 - **Node.js 22+** — check with `node --version`. Install via [nodejs.org](https://nodejs.org) or `nvm install 22 && nvm use 22`.
-- **pnpm 11+** — check with `pnpm --version`. Install with `npm install -g pnpm@latest` or `curl -fsSL https://get.pnpm.io/install.sh | sh -`.
+- **pnpm 11+** — check with `pnpm --version`. Install with `curl -fsSL https://get.pnpm.io/install.sh | sh -`.
 - **Chrome 135+** — required for the `chrome.userScripts` API. Check `chrome://settings/help`.
 
 ```bash

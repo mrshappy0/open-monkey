@@ -22,7 +22,7 @@ OpenMonkey is a privacy-first, open-source userscript manager built as a Chrome/
 | Tool | Version / Notes |
 |---|---|
 | **Node.js** | `22+` — required. Check with `node --version`. Install via [nodejs.org](https://nodejs.org) or `nvm install 22`. |
-| **pnpm** | `11+` — required. Check with `pnpm --version`. Install with `npm install -g pnpm@latest` or `curl -fsSL https://get.pnpm.io/install.sh \| sh -`. Never use npm or yarn. |
+| **pnpm** | `11+` — required. Check with `pnpm --version`. Install with `curl -fsSL https://get.pnpm.io/install.sh \| sh -`. Never use npm or yarn. |
 | **Chrome** | `135+` — required for `chrome.userScripts` API. |
 | **WXT** | `^0.20.x` — the extension framework. Everything goes through WXT. |
 | **React** | `^19` — popup UI only |
