@@ -48,20 +48,30 @@ function syncScriptKey(id: string): string {
   return `om_s_${id.replace(/[^a-zA-Z0-9]/g, '_')}`;
 }
 
-// Chrome sync has an 8 KB per-item quota. Large scripts are split into
-// 7 000-char string chunks stored as om_s_{id}_c0, _c1, … with a tiny
-// marker object at om_s_{id} = { chunked: true, count: N }.
-const SYNC_CHUNK_CHARS = 7000;
+// Chrome sync quotas are enforced in bytes (UTF-8). Use TextEncoder so the
+// threshold is accurate for any script content, not just ASCII.
+const SYNC_CHUNK_BYTES = 7000; // safely under Chrome's 8 192 byte per-item quota
 
-function chunkString(s: string): string[] {
+// Chunk a string so each piece encodes to ≤ SYNC_CHUNK_BYTES UTF-8 bytes.
+// Script code is almost always pure ASCII (1 byte/char) so the inner shrink
+// loop only triggers for multi-byte characters in comments/strings.
+function chunkStringByBytes(s: string): string[] {
+  const enc = new TextEncoder();
   const out: string[] = [];
-  for (let i = 0; i < s.length; i += SYNC_CHUNK_CHARS) out.push(s.slice(i, i + SYNC_CHUNK_CHARS));
+  let start = 0;
+  while (start < s.length) {
+    let end = Math.min(start + SYNC_CHUNK_BYTES, s.length);
+    while (enc.encode(s.slice(start, end)).byteLength > SYNC_CHUNK_BYTES) end--;
+    out.push(s.slice(start, end));
+    start = end;
+  }
   return out;
 }
 
 async function writeSyncScripts(scripts: UserScript[]): Promise<void> {
   // Clear stale chunk keys before writing so orphaned chunks don't accumulate.
   await clearSyncScripts();
+  const enc = new TextEncoder();
   const toSet: Record<string, unknown> = {
     [SYNC_FLAG_KEY]: true,
     [SYNC_IDS_KEY]: scripts.map(s => s.id),
@@ -69,10 +79,12 @@ async function writeSyncScripts(scripts: UserScript[]): Promise<void> {
   for (const s of scripts) {
     const json = JSON.stringify(s);
     const base = syncScriptKey(s.id);
-    if (json.length <= SYNC_CHUNK_CHARS) {
-      toSet[base] = s;
+    if (enc.encode(json).byteLength <= SYNC_CHUNK_BYTES) {
+      // Store the serialized JSON string so the measured byte length matches
+      // exactly what Chrome will persist (no double-serialization surprise).
+      toSet[base] = json;
     } else {
-      const chunks = chunkString(json);
+      const chunks = chunkStringByBytes(json);
       toSet[base] = { chunked: true, count: chunks.length };
       chunks.forEach((c, i) => { toSet[`${base}_c${i}`] = c; });
     }
@@ -95,15 +107,39 @@ async function readSyncScripts(): Promise<UserScript[] | null> {
   const scripts: UserScript[] = [];
   for (const id of ids) {
     const base = syncScriptKey(id);
-    const entry = data[base] as UserScript | { chunked: true; count: number } | undefined;
-    if (!entry) continue;
-    if ((entry as { chunked?: boolean }).chunked) {
-      const { count } = entry as { chunked: true; count: number };
-      const joined = Array.from({ length: count }, (_, i) => (data[`${base}_c${i}`] as string) ?? '').join('');
-      try { scripts.push(JSON.parse(joined) as UserScript); }
-      catch { logger.warn('[sync] failed to parse chunked script', id); }
-    } else {
-      scripts.push(entry as UserScript);
+    const entry = data[base] as string | { chunked: true; count: number } | undefined;
+    if (!entry) {
+      logger.warn('[sync] missing sync entry for script', id);
+      continue;
+    }
+    try {
+      if (typeof entry === 'string') {
+        // Non-chunked path: entry is the raw JSON string of the UserScript.
+        scripts.push(JSON.parse(entry) as UserScript);
+      } else {
+        const { count } = entry;
+        if (!Number.isFinite(count) || count < 1 || count > 100) {
+          logger.warn('[sync] invalid chunk count for script', id, count);
+          continue;
+        }
+        // Validate every chunk is present before joining — avoids silently
+        // parsing a corrupt/truncated script.
+        const chunks: string[] = [];
+        let missing = false;
+        for (let i = 0; i < count; i++) {
+          const chunk = data[`${base}_c${i}`];
+          if (typeof chunk !== 'string') {
+            logger.warn('[sync] missing chunk', i, 'for script', id);
+            missing = true;
+            break;
+          }
+          chunks.push(chunk);
+        }
+        if (missing) continue;
+        scripts.push(JSON.parse(chunks.join('')) as UserScript);
+      }
+    } catch {
+      logger.warn('[sync] failed to parse script', id);
     }
   }
   return scripts;
@@ -120,12 +156,18 @@ async function initSync(): Promise<void> {
   ]);
 
   if (!settings.syncEnabled && syncFlag[SYNC_FLAG_KEY]) {
-    // Another device turned on sync — pull scripts and enable locally.
-    const synced = await readSyncScripts();
-    if (synced) {
-      await settingsItem.setValue({ ...settings, syncEnabled: true });
-      await scriptsItem.setValue(synced);
-      logger.log('[sync] pulled', synced.length, 'scripts from Chrome sync (enabled by another device)');
+    // Another device turned on sync. Only auto-pull on a fresh install (no local
+    // scripts) — overwriting existing local-only scripts would be destructive.
+    const localScripts = await scriptsItem.getValue();
+    if (localScripts.length === 0) {
+      const synced = await readSyncScripts();
+      if (synced && synced.length > 0) {
+        await settingsItem.setValue({ ...settings, syncEnabled: true });
+        await scriptsItem.setValue(synced);
+        logger.log('[sync] pulled', synced.length, 'scripts from Chrome sync (enabled by another device)');
+      }
+    } else {
+      logger.log('[sync] skipping auto-pull — device already has', localScripts.length, 'local script(s)');
     }
     return;
   }
