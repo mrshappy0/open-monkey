@@ -36,11 +36,17 @@ export default function App() {
   const [newEntryKey, setNewEntryKey] = useState('');
   const [newEntryValue, setNewEntryValue] = useState('');
   const [newEntrySecret, setNewEntrySecret] = useState(false);
+  const [syncEnabled, setSyncEnabled] = useState(false);
+  const [syncPending, setSyncPending] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
 
   useEffect(() => {
     scriptsItem.getValue().then(setScripts);
-    settingsItem.getValue().then(s => setMaxRetries(s.maxRetries));
+    settingsItem.getValue().then(s => { setMaxRetries(s.maxRetries); setSyncEnabled(s.syncEnabled); });
     const unwatch = scriptsItem.watch(val => setScripts(val ?? []));
+    const unwatchSettings = settingsItem.watch(s => {
+      if (s) { setMaxRetries(s.maxRetries); setSyncEnabled(s.syncEnabled); }
+    });
 
     // Query current bridge state, then watch for live changes.
     browser.runtime.sendMessage({ type: 'get_bridge_status' })
@@ -62,6 +68,7 @@ export default function App() {
     return () => {
       unwatch();
       unwatchStore();
+      unwatchSettings();
       browser.runtime.onMessage.removeListener(onBridgeMessage);
     };
   }, []);
@@ -69,7 +76,21 @@ export default function App() {
   async function saveMaxRetries(value: number) {
     const clamped = Math.max(0, Math.min(10, value));
     setMaxRetries(clamped);
-    await settingsItem.setValue({ maxRetries: clamped });
+    const s = await settingsItem.getValue();
+    await settingsItem.setValue({ ...s, maxRetries: clamped });
+  }
+
+  async function handleSyncToggle(enable: boolean) {
+    setSyncPending(true);
+    setSyncError(null);
+    try {
+      const res = await browser.runtime.sendMessage({ type: 'sync_toggle', enable }) as { ok: boolean; error?: string };
+      if (!res.ok) setSyncError(res.error ?? 'Sync failed');
+    } catch (err) {
+      setSyncError(String(err));
+    } finally {
+      setSyncPending(false);
+    }
   }
 
   async function persist(updated: UserScript[]) {
@@ -418,8 +439,30 @@ export default function App() {
           </div>
         ))}
       </main>
+      {syncError && (
+        <div className="sync-error-banner" role="alert">
+          <span>{syncError}</span>
+          <button className="btn-text" aria-label="Dismiss sync error" onClick={() => setSyncError(null)}>✕</button>
+        </div>
+      )}
       <footer className="settings-footer">
         <button className="btn-text" onClick={() => setView('store')}>Script Data</button>
+        <label
+          className="sync-label"
+          title={syncEnabled
+            ? 'Scripts are synced via your Chrome account (Google\'s servers). Toggle off to stop.'
+            : 'Sync scripts across devices using your Chrome account. Scripts will flow through Google\'s servers.'}
+        >
+          <button
+            role="switch"
+            aria-checked={syncEnabled}
+            className={`toggle ${syncEnabled ? 'on' : 'off'}`}
+            onClick={() => handleSyncToggle(!syncEnabled)}
+            aria-label={syncEnabled ? 'Disable sync' : 'Enable sync'}
+            disabled={syncPending}
+          />
+          <span className="settings-label">Sync</span>
+        </label>
         <span className="settings-label">Max retries</span>
         <input
           className="settings-input"

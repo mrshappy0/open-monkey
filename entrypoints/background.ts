@@ -1,9 +1,8 @@
 import { parseMeta } from '../utils/meta-parser';
 import { matchesPattern } from '../utils/match-pattern';
-import { scriptsItem, settingsItem } from '../utils/storage';
+import { scriptsItem, settingsItem, type UserScript } from '../utils/storage';
 import { logger } from '../utils/logger';
 import testBannerCode from '../dev-scripts/test-banner.user.js?raw';
-import readingModeCode from '../dev-scripts/reading-mode.user.js?raw';
 import askPageCode from '../dev-scripts/ask-page.user.js?raw';
 
 const SKIP_SCHEMES = ['chrome://', 'chrome-extension://', 'about:', 'edge://'];
@@ -23,12 +22,6 @@ interface BuiltinScript {
 
 const BUILTIN_SCRIPTS: BuiltinScript[] = [
   {
-    id: 'openmonkey-builtin-reading-mode',
-    name: 'Reading Mode — Distraction-Free Reader',
-    code: readingModeCode,
-    devOnly: false,
-  },
-  {
     id: 'openmonkey-builtin-test-banner',
     name: 'OpenMonkey - Test Banner (All Pages)',
     code: testBannerCode,
@@ -41,6 +34,154 @@ const BUILTIN_SCRIPTS: BuiltinScript[] = [
     devOnly: false,
   },
 ];
+
+// ---------------------------------------------------------------------------
+// Chrome Sync helpers — mirror scripts to chrome.storage.sync when enabled.
+// Each script is stored as its own key (om_s_{id}) to stay under Chrome's
+// 8 KB per-item quota. The flag key and IDs index are always tiny.
+// ---------------------------------------------------------------------------
+
+const SYNC_FLAG_KEY = 'om_sync_enabled';
+const SYNC_IDS_KEY = 'om_script_ids';
+
+function syncScriptKey(id: string): string {
+  return `om_s_${id.replace(/[^a-zA-Z0-9]/g, '_')}`;
+}
+
+// Chrome sync quotas are enforced in bytes (UTF-8). Use TextEncoder so the
+// threshold is accurate for any script content, not just ASCII.
+const SYNC_CHUNK_BYTES = 7000; // safely under Chrome's 8 192 byte per-item quota
+
+// Chunk a string so each piece encodes to ≤ SYNC_CHUNK_BYTES UTF-8 bytes.
+// Script code is almost always pure ASCII (1 byte/char) so the inner shrink
+// loop only triggers for multi-byte characters in comments/strings.
+function chunkStringByBytes(s: string): string[] {
+  const enc = new TextEncoder();
+  const out: string[] = [];
+  let start = 0;
+  while (start < s.length) {
+    let end = Math.min(start + SYNC_CHUNK_BYTES, s.length);
+    while (enc.encode(s.slice(start, end)).byteLength > SYNC_CHUNK_BYTES) end--;
+    out.push(s.slice(start, end));
+    start = end;
+  }
+  return out;
+}
+
+async function writeSyncScripts(scripts: UserScript[]): Promise<void> {
+  // Clear stale chunk keys before writing so orphaned chunks don't accumulate.
+  await clearSyncScripts();
+  const enc = new TextEncoder();
+  const toSet: Record<string, unknown> = {
+    [SYNC_FLAG_KEY]: true,
+    [SYNC_IDS_KEY]: scripts.map(s => s.id),
+  };
+  for (const s of scripts) {
+    const json = JSON.stringify(s);
+    const base = syncScriptKey(s.id);
+    if (enc.encode(json).byteLength <= SYNC_CHUNK_BYTES) {
+      // Store the serialized JSON string so the measured byte length matches
+      // exactly what Chrome will persist (no double-serialization surprise).
+      toSet[base] = json;
+    } else {
+      const chunks = chunkStringByBytes(json);
+      toSet[base] = { chunked: true, count: chunks.length };
+      chunks.forEach((c, i) => { toSet[`${base}_c${i}`] = c; });
+    }
+  }
+  await browser.storage.sync.set(toSet);
+}
+
+async function clearSyncScripts(): Promise<void> {
+  const existing = await browser.storage.sync.get(null);
+  const keys = Object.keys(existing).filter(
+    k => k === SYNC_FLAG_KEY || k === SYNC_IDS_KEY || k.startsWith('om_s_'),
+  );
+  if (keys.length > 0) await browser.storage.sync.remove(keys);
+}
+
+async function readSyncScripts(): Promise<UserScript[] | null> {
+  const data = await browser.storage.sync.get(null);
+  if (!data[SYNC_FLAG_KEY]) return null;
+  const ids = (data[SYNC_IDS_KEY] as string[] | undefined) ?? [];
+  const scripts: UserScript[] = [];
+  for (const id of ids) {
+    const base = syncScriptKey(id);
+    const entry = data[base] as string | { chunked: true; count: number } | undefined;
+    if (!entry) {
+      logger.warn('[sync] missing sync entry for script', id);
+      continue;
+    }
+    try {
+      if (typeof entry === 'string') {
+        // Non-chunked path: entry is the raw JSON string of the UserScript.
+        scripts.push(JSON.parse(entry) as UserScript);
+      } else {
+        const { count } = entry;
+        if (!Number.isFinite(count) || count < 1 || count > 100) {
+          logger.warn('[sync] invalid chunk count for script', id, count);
+          continue;
+        }
+        // Validate every chunk is present before joining — avoids silently
+        // parsing a corrupt/truncated script.
+        const chunks: string[] = [];
+        let missing = false;
+        for (let i = 0; i < count; i++) {
+          const chunk = data[`${base}_c${i}`];
+          if (typeof chunk !== 'string') {
+            logger.warn('[sync] missing chunk', i, 'for script', id);
+            missing = true;
+            break;
+          }
+          chunks.push(chunk);
+        }
+        if (missing) continue;
+        scripts.push(JSON.parse(chunks.join('')) as UserScript);
+      }
+    } catch {
+      logger.warn('[sync] failed to parse script', id);
+    }
+  }
+  return scripts;
+}
+
+/**
+ * On startup: if another device enabled sync, pull scripts down and enable
+ * locally. If already enabled locally, push current state to sync.
+ */
+async function initSync(): Promise<void> {
+  const [settings, syncFlag] = await Promise.all([
+    settingsItem.getValue(),
+    browser.storage.sync.get(SYNC_FLAG_KEY),
+  ]);
+
+  if (!settings.syncEnabled && syncFlag[SYNC_FLAG_KEY]) {
+    // Another device turned on sync. Only auto-pull on a fresh install (no local
+    // scripts) — overwriting existing local-only scripts would be destructive.
+    const localScripts = await scriptsItem.getValue();
+    if (localScripts.length === 0) {
+      const synced = await readSyncScripts();
+      if (synced && synced.length > 0) {
+        await settingsItem.setValue({ ...settings, syncEnabled: true });
+        await scriptsItem.setValue(synced);
+        logger.log('[sync] pulled', synced.length, 'scripts from Chrome sync (enabled by another device)');
+      }
+    } else {
+      logger.log('[sync] skipping auto-pull — device already has', localScripts.length, 'local script(s)');
+    }
+    return;
+  }
+
+  if (settings.syncEnabled) {
+    // Already enabled — push local state to sync on restart.
+    const scripts = await scriptsItem.getValue();
+    await writeSyncScripts(scripts).catch((err: unknown) =>
+      logger.warn('[sync] startup mirror failed:', err),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 
 async function ensureBuiltinScripts(): Promise<void> {
   const scripts = await scriptsItem.getValue();
@@ -409,12 +550,46 @@ export default defineBackground(() => {
   // Ensure built-in scripts are present in storage on every worker startup.
   ensureBuiltinScripts().catch((err: unknown) => logger.warn('ensureBuiltinScripts failed:', err));
 
+  // Initialize Chrome sync — auto-pull if another device enabled it.
+  initSync().catch((err: unknown) => logger.warn('initSync failed:', err));
+
+  // Mirror script mutations to chrome.storage.sync while sync is enabled.
+  scriptsItem.watch(async (scripts) => {
+    const settings = await settingsItem.getValue();
+    if (settings.syncEnabled && scripts) {
+      writeSyncScripts(scripts).catch((err: unknown) =>
+        logger.warn('[sync] mirror write failed:', err),
+      );
+    }
+  });
+
   // Let the popup query the current bridge state, and handle script toggle reloads.
   browser.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     const m = msg as { type?: string; id?: string } | null;
     if (m?.type === 'get_bridge_status') {
       sendResponse({ connected: ws?.readyState === WebSocket.OPEN });
       return;
+    }
+    if (m?.type === 'sync_toggle') {
+      const enable = (msg as { type: string; enable: boolean }).enable;
+      (async () => {
+        const settings = await settingsItem.getValue();
+        if (enable) {
+          const scripts = await scriptsItem.getValue();
+          try {
+            await writeSyncScripts(scripts);
+            await settingsItem.setValue({ ...settings, syncEnabled: true });
+            sendResponse({ ok: true });
+          } catch (err) {
+            sendResponse({ ok: false, error: String(err) });
+          }
+        } else {
+          await clearSyncScripts();
+          await settingsItem.setValue({ ...settings, syncEnabled: false });
+          sendResponse({ ok: true });
+        }
+      })();
+      return true; // keep channel open for async sendResponse
     }
     if (m?.type === 'script_toggled' && m.id) {
       const scriptId = m.id;
