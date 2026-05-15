@@ -2,10 +2,11 @@ import { storage } from '#imports';
 
 export interface Settings {
   maxRetries: number;
+  syncEnabled: boolean;
 }
 
 export const settingsItem = storage.defineItem<Settings>('local:settings', {
-  fallback: { maxRetries: 3 },
+  fallback: { maxRetries: 3, syncEnabled: false },
   version: 1,
 });
 

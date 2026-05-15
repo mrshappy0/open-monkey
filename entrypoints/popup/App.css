@@ -209,6 +209,25 @@
   color: #7f849c;
 }
 
+.sync-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.sync-error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 14px;
+  background: #1e1e2e;
+  border-top: 1px solid #f38ba8;
+  color: #f38ba8;
+  font-size: 11px;
+}
+
 .settings-input {
   width: 48px;
   background: #313244;
