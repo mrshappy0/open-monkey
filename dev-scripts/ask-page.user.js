@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Ask AI — Page Q&A
-// @description  Floating button on every page — ask AI about the current page. Supports Ollama (local) and any OpenAI-compatible API (GitHub Copilot, OpenAI, etc.).
+// @description  Floating button on every page — ask AI about the current page. Supports Ollama (local) and any cloud LLM with an OpenAI-compatible API (OpenAI, Anthropic, GitHub Copilot, Mistral, etc.).
 // @match        *://*/*
 // @run-at       document-end
 // @version      1.0.0
@@ -299,7 +299,7 @@
   const apiProvBtn = document.createElement('button');
   apiProvBtn.className = 'prov-btn';
   apiProvBtn.dataset.prov = 'api';
-  apiProvBtn.textContent = 'OpenAI-compatible';
+  apiProvBtn.textContent = 'Cloud API';
   provBtns.appendChild(ollamaBtn);
   provBtns.appendChild(apiProvBtn);
   provRow.appendChild(provLabel);
@@ -316,7 +316,7 @@
   endpointLabel.textContent = 'Endpoint';
   const endpointInput = document.createElement('input');
   endpointInput.className = 'sinput';
-  endpointInput.placeholder = 'https://api.githubcopilot.com';
+  endpointInput.placeholder = 'https://api.openai.com';
   endpointInput.type = 'url';
   endpointRow.appendChild(endpointLabel);
   endpointRow.appendChild(endpointInput);
@@ -354,7 +354,7 @@
   // Messages
   const messages = document.createElement('div');
   messages.id = 'messages';
-  const hintEl = makeMsg('hint', null, 'Ask anything about this page — the full content is included as context. Supports Ollama (local) and any OpenAI-compatible API.');
+  const hintEl = makeMsg('hint', null, 'Ask anything about this page — the full content is included as context. Supports Ollama (local) or any cloud LLM with an OpenAI-compatible API (OpenAI, Anthropic, GitHub Copilot, Mistral, and more).');
   messages.appendChild(hintEl[0]);
   panel.appendChild(messages);
 
@@ -389,7 +389,7 @@
 
   (function initSettings() {
     const cfg = loadCfg();
-    endpointInput.value = cfg.apiEndpoint || '';
+    endpointInput.value = cfg.apiEndpoint || 'https://api.openai.com';
     keyInput.value = cfg.apiKey || '';
     apiModelInput.value = cfg.apiModel || '';
     applyProvider(cfg.provider || 'ollama');
@@ -434,7 +434,7 @@
 
   function saveApiFields() {
     saveCfg({
-      apiEndpoint: endpointInput.value.trim(),
+      apiEndpoint: endpointInput.value.trim() || 'https://api.openai.com',
       apiKey: keyInput.value.trim(),
       apiModel: apiModelInput.value.trim(),
     });
@@ -482,18 +482,13 @@
     const cfg = loadCfg();
     const isApi = cfg.provider === 'api';
     const model = isApi ? cfg.apiModel : modelSelect.value;
+    const effectiveEndpoint = cfg.apiEndpoint || 'https://api.openai.com';
 
     if (!model) {
       const msg = isApi
         ? 'No model configured. Open ⚙ settings and enter a model name.'
         : 'No model selected. Is Ollama running? Try: ollama serve';
       const [el] = makeMsg('error', null, msg);
-      messages.appendChild(el);
-      messages.scrollTop = messages.scrollHeight;
-      return;
-    }
-    if (isApi && !cfg.apiEndpoint) {
-      const [el] = makeMsg('error', null, 'No API endpoint configured. Open ⚙ settings.');
       messages.appendChild(el);
       messages.scrollTop = messages.scrollHeight;
       return;
@@ -538,7 +533,7 @@
       };
       if (isApi) {
         await streamChat(
-          cfg.apiEndpoint, cfg.apiKey, model,
+          effectiveEndpoint, cfg.apiKey, model,
           [{ role: 'system', content: systemContent }, { role: 'user', content: question }],
           abortCtrl.signal, onToken
         );

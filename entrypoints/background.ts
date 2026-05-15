@@ -181,11 +181,11 @@ async function handleBridgeMessage(msg: BridgeMessage): Promise<void> {
       const { code } = msg.payload as { code: string };
       const [tab] = await browser.tabs.query({ active: true, lastFocusedWindow: true });
       if (!tab?.id) { reply(null); break; }
-      // Run in MAIN world so the code has full page-context access.
-      // Code is passed as a serialized arg — no eval happens in the service worker.
+      // Run in ISOLATED world (extension context) — not subject to the page's CSP,
+      // so eval works even on pages with strict script-src (e.g. GitHub, Google).
+      // DOM, window, document, and localStorage are all accessible from isolated world.
       const results = await browser.scripting.executeScript({
         target: { tabId: tab.id },
-        world: 'MAIN',
         func: (c: string) => (0, eval)(c),
         args: [code],
       });
