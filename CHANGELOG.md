@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/mrshappy0/open-monkey/compare/v1.1.0...v1.2.0) (2026-05-15)
+
+
+### Features
+
+* Chrome sync toggle with chunking for large scripts ([#13](https://github.com/mrshappy0/open-monkey/issues/13)) ([6d79755](https://github.com/mrshappy0/open-monkey/commit/6d797551ce72c925240e945f733b7de25a123ebd))
+
 # [1.1.0](https://github.com/mrshappy0/open-monkey/compare/v1.0.0...v1.1.0) (2026-05-15)
 
 
