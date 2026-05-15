@@ -49,8 +49,17 @@ export const SCRIPT_TEMPLATE = `\
 // @run-at      document-end
 // ==/UserScript==
 
-(function () {
+(async function () {
   'use strict';
+
+  // Persistent storage — survives tab switches and browser restarts.
+  // Keys are namespaced to this script automatically.
+  //
+  // const value = await GM_getValue('myKey', 'defaultValue');
+  // await GM_setValue('myKey', 'someValue');
+  // await GM_setValue('apiKey', 'sk-...', true); // true = secret (masked in popup)
+  // await GM_deleteValue('myKey');
+  // const keys = await GM_listValues();
 
   // Your code here
 })();

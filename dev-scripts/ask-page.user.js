@@ -12,17 +12,21 @@
   const OLLAMA_BASE = 'http://localhost:11434';
   const HOST_ID = 'om-ask-host';
   const MAX_PAGE_CHARS = 8000;
-  const LS_KEY = 'om-ask-cfg';
-
   if (document.getElementById(HOST_ID)) return;
 
-  // ── Config helpers ──────────────────────────────────────────────────────
+  // ── Config helpers — GM_getValue / GM_setValue are auto-injected by OpenMonkey
 
-  function loadCfg() {
-    try { return JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch { return {}; }
+  async function loadCfg() {
+    return {
+      provider:    await GM_getValue('provider', 'ollama'),
+      apiEndpoint: await GM_getValue('apiEndpoint', ''),
+      apiKey:      await GM_getValue('apiKey', ''),
+      apiModel:    await GM_getValue('apiModel', ''),
+    };
   }
+
   function saveCfg(patch) {
-    localStorage.setItem(LS_KEY, JSON.stringify({ ...loadCfg(), ...patch }));
+    GM_setValues(patch, ['apiKey']);
   }
 
   // ── Page text extraction ────────────────────────────────────────────────
@@ -377,23 +381,23 @@
 
   // ── Provider / settings helpers ─────────────────────────────────────────
 
-  function applyProvider(prov) {
+  function applyProvider(prov, apiModel) {
     const isApi = prov === 'api';
     modelSelect.style.display = isApi ? 'none' : '';
     apiBadge.style.display = isApi ? '' : 'none';
     ollamaBtn.classList.toggle('active', !isApi);
     apiProvBtn.classList.toggle('active', isApi);
     apiFields.classList.toggle('visible', isApi);
-    if (isApi) apiBadge.textContent = loadCfg().apiModel || 'API';
+    if (isApi) apiBadge.textContent = apiModel || 'API';
   }
 
-  (function initSettings() {
-    const cfg = loadCfg();
+  async function initSettings() {
+    const cfg = await loadCfg();
     endpointInput.value = cfg.apiEndpoint || 'https://api.openai.com';
     keyInput.value = cfg.apiKey || '';
     apiModelInput.value = cfg.apiModel || '';
-    applyProvider(cfg.provider || 'ollama');
-  })();
+    applyProvider(cfg.provider || 'ollama', cfg.apiModel);
+  }
 
   // ── Load models ──────────────────────────────────────────────────────────
 
@@ -411,10 +415,18 @@
   // ── Toggle ───────────────────────────────────────────────────────────────
 
   let panelOpen = false;
+  let settingsInited = false;
   fab.addEventListener('click', () => {
     panelOpen = !panelOpen;
     panel.classList.toggle('open', panelOpen);
-    if (panelOpen) setTimeout(() => qInput.focus(), 160);
+    if (panelOpen) {
+      if (!settingsInited) {
+        settingsInited = true;
+        initSettings().then(() => qInput.focus());
+      } else {
+        setTimeout(() => qInput.focus(), 60);
+      }
+    }
   });
 
   // ── Settings logic ──────────────────────────────────────────────────────
@@ -479,7 +491,7 @@
     const question = qInput.value.trim();
     if (!question) return;
 
-    const cfg = loadCfg();
+    const cfg = await loadCfg();
     const isApi = cfg.provider === 'api';
     const model = isApi ? cfg.apiModel : modelSelect.value;
     const effectiveEndpoint = cfg.apiEndpoint || 'https://api.openai.com';

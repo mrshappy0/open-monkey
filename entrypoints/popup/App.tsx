@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { parseMeta, SCRIPT_TEMPLATE } from '../../utils/meta-parser';
-import { scriptsItem, settingsItem, type UserScript } from '../../utils/storage';
+import { scriptsItem, settingsItem, scriptStoreItem, type UserScript, type ScriptStore } from '../../utils/storage';
 import './App.css';
 
-type View = 'list' | 'editor';
+type View = 'list' | 'editor' | 'store';
 
 export default function App() {
   const [scripts, setScripts] = useState<UserScript[]>([]);
@@ -13,6 +13,8 @@ export default function App() {
   const [saving, setSaving] = useState(false);
   const [maxRetries, setMaxRetries] = useState(3);
   const [bridgeConnected, setBridgeConnected] = useState<boolean | null>(null);
+  const [storeData, setStoreData] = useState<ScriptStore>({});
+  const [revealed, setRevealed] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     scriptsItem.getValue().then(setScripts);
@@ -33,8 +35,12 @@ export default function App() {
     };
     browser.runtime.onMessage.addListener(onBridgeMessage);
 
+    scriptStoreItem.getValue().then(setStoreData);
+    const unwatchStore = scriptStoreItem.watch(val => setStoreData(val ?? {}));
+
     return () => {
       unwatch();
+      unwatchStore();
       browser.runtime.onMessage.removeListener(onBridgeMessage);
     };
   }, []);
@@ -83,6 +89,77 @@ export default function App() {
   async function deleteScript(id: string) {
     if (!confirm('Delete this script?')) return;
     await persist(scripts.filter(s => s.id !== id));
+  }
+
+  function toggleReveal(entryKey: string) {
+    setRevealed(prev => {
+      const next = new Set(prev);
+      next.has(entryKey) ? next.delete(entryKey) : next.add(entryKey);
+      return next;
+    });
+  }
+
+  async function deleteStoreEntry(namespace: string, key: string) {
+    const updated = { ...storeData };
+    const ns = { ...(updated[namespace] ?? {}) };
+    delete ns[key];
+    if (Object.keys(ns).length === 0) {
+      delete updated[namespace];
+    } else {
+      updated[namespace] = ns;
+    }
+    await scriptStoreItem.setValue(updated);
+  }
+
+  if (view === 'store') {
+    return (
+      <div className="app">
+        <header className="header">
+          <button className="btn-text" onClick={() => setView('list')}>← Back</button>
+          <span className="header-title">Script Data</span>
+        </header>
+        <main className="store-list">
+          {Object.keys(storeData).length === 0 && (
+            <p className="empty">No script data stored yet.</p>
+          )}
+          {Object.entries(storeData).map(([ns, entries]) => (
+            <div key={ns} className="store-ns">
+              <div className="store-ns-header">
+                <span className="store-ns-name">{ns}</span>
+              </div>
+              {Object.entries(entries).map(([key, entry]) => {
+                const revealKey = `${ns}:${key}`;
+                const isRevealed = revealed.has(revealKey);
+                return (
+                  <div key={key} className="store-entry">
+                    <span className="store-key">{key}</span>
+                    <span className={`store-value${entry.secret && !isRevealed ? ' store-value--masked' : ''}`}>
+                      {entry.secret && !isRevealed ? '••••••••' : String(entry.value)}
+                    </span>
+                    {entry.secret && (
+                      <button
+                        className="action-btn"
+                        onClick={() => toggleReveal(revealKey)}
+                        title={isRevealed ? 'Hide' : 'Reveal'}
+                      >
+                        {isRevealed ? '🙈' : '👁'}
+                      </button>
+                    )}
+                    <button
+                      className="action-btn danger"
+                      onClick={() => deleteStoreEntry(ns, key)}
+                      aria-label={`Delete ${key}`}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </main>
+      </div>
+    );
   }
 
   if (view === 'editor') {
@@ -152,6 +229,7 @@ export default function App() {
         ))}
       </main>
       <footer className="settings-footer">
+        <button className="btn-text" onClick={() => setView('store')}>Script Data</button>
         <span className="settings-label">Max retries</span>
         <input
           className="settings-input"
