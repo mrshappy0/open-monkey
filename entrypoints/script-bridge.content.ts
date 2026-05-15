@@ -6,10 +6,17 @@
  * in the extension context (with storage access) and handles reads/writes on
  * their behalf via window CustomEvents.
  *
- * Security note: window CustomEvents are visible to page-level JavaScript on
- * the same origin. Values stored in chrome.storage.local are safe at rest
- * (extension-only API access), but the event channel is shared with the page.
- * Do not store credentials on pages you do not control.
+ * Security model:
+ *   USER_SCRIPT world scripts do not have access to chrome.* APIs, so window
+ *   CustomEvents are the only available communication channel. This means event
+ *   payloads (including values) are observable by page-level JavaScript on the
+ *   same origin. chrome.storage.local is safe at rest (extension-only at rest),
+ *   but the transit channel is shared with the page.
+ *
+ *   Mitigation: every incoming event is validated against the list of installed
+ *   script IDs. Events whose namespace does not match a known script UUID are
+ *   silently ignored, preventing page scripts from reading or writing arbitrary
+ *   namespaces. Do not store credentials on pages you do not control.
  *
  * Events in:
  *   om-store-getall  { requestId, namespace }
@@ -28,7 +35,7 @@
  *   om-store-delete-ack     { requestId }
  */
 
-import { scriptStoreItem } from '../utils/storage';
+import { scriptsItem, scriptStoreItem } from '../utils/storage';
 
 interface StoreGetAllDetail  { requestId: string; namespace: string; }
 interface StoreGetDetail     { requestId: string; namespace: string; key: string; }
@@ -42,8 +49,15 @@ export default defineContentScript({
   runAt: 'document_start',
 
   main() {
+    /** Returns true only if `namespace` matches a UUID of an installed script. */
+    async function isKnownScript(namespace: string): Promise<boolean> {
+      const scripts = await scriptsItem.getValue();
+      return scripts.some(s => s.id === namespace);
+    }
+
     window.addEventListener('om-store-getall', async (e: Event) => {
       const { requestId, namespace } = (e as CustomEvent<StoreGetAllDetail>).detail;
+      if (!await isKnownScript(namespace)) return;
       const store = await scriptStoreItem.getValue();
       const ns = store[namespace] ?? {};
       const data: Record<string, unknown> = {};
@@ -53,6 +67,7 @@ export default defineContentScript({
 
     window.addEventListener('om-store-get', async (e: Event) => {
       const { requestId, namespace, key } = (e as CustomEvent<StoreGetDetail>).detail;
+      if (!await isKnownScript(namespace)) return;
       const store = await scriptStoreItem.getValue();
       const value = store[namespace]?.[key]?.value;
       window.dispatchEvent(new CustomEvent('om-store-value', { detail: { requestId, value } }));
@@ -60,6 +75,7 @@ export default defineContentScript({
 
     window.addEventListener('om-store-set', async (e: Event) => {
       const { requestId, namespace, key, value, secret = false } = (e as CustomEvent<StoreSetDetail>).detail;
+      if (!await isKnownScript(namespace)) return;
       const store = await scriptStoreItem.getValue();
       await scriptStoreItem.setValue({
         ...store,
@@ -73,6 +89,7 @@ export default defineContentScript({
 
     window.addEventListener('om-store-list', async (e: Event) => {
       const { requestId, namespace } = (e as CustomEvent<StoreListDetail>).detail;
+      if (!await isKnownScript(namespace)) return;
       const store = await scriptStoreItem.getValue();
       const keys = Object.keys(store[namespace] ?? {});
       window.dispatchEvent(new CustomEvent('om-store-list-result', { detail: { requestId, keys } }));
@@ -81,6 +98,7 @@ export default defineContentScript({
     // Atomic multi-key write — avoids race conditions when saving several keys at once.
     window.addEventListener('om-store-setmany', async (e: Event) => {
       const { requestId, namespace, patch } = (e as CustomEvent<StoreSetManyDetail>).detail;
+      if (!await isKnownScript(namespace)) return;
       const store = await scriptStoreItem.getValue();
       await scriptStoreItem.setValue({
         ...store,
@@ -98,6 +116,7 @@ export default defineContentScript({
 
     window.addEventListener('om-store-delete', async (e: Event) => {
       const { requestId, namespace, key } = (e as CustomEvent<StoreDeleteDetail>).detail;
+      if (!await isKnownScript(namespace)) return;
       const store = await scriptStoreItem.getValue();
       if (!store[namespace]) {
         window.dispatchEvent(new CustomEvent('om-store-delete-ack', { detail: { requestId } }));

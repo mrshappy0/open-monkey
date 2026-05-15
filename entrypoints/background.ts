@@ -269,6 +269,11 @@ function buildGMPreamble(scriptId: string): string {
       window.dispatchEvent(new CustomEvent('om-store-get', { detail: { requestId: rid, namespace: _NS, key: key } }));
     });
   }
+  // secret: true marks the value for masked display (••••••••) in the OpenMonkey
+  // popup Script Data view. It does NOT encrypt the value or prevent page-level
+  // JavaScript from observing it in the window event payload — the USER_SCRIPT
+  // world communicates via window CustomEvents, which are visible to page scripts
+  // on the same origin. Only use secret values on pages you control.
   function GM_setValue(key, value, secret) {
     return new Promise(function (resolve) {
       var rid = Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -284,7 +289,8 @@ function buildGMPreamble(scriptId: string): string {
     });
   }
   // Atomic multi-key write — pass an object of { key: value } and an optional
-  // array (or function) of keys that should be marked as secrets.
+  // array (or function) of keys to mark as secrets (masked in the popup, same
+  // transit-visibility caveat as GM_setValue).
   function GM_setValues(patch, secretKeys) {
     return new Promise(function (resolve) {
       var rid = Math.random().toString(36).slice(2) + Date.now().toString(36);
