@@ -110,6 +110,14 @@ chrome.storage.local.get('scripts', (data) => {});
 
 Storage items use the `local:` prefix for `chrome.storage.local`. Never use `sync:` — OpenMonkey is local-only by design.
 
+Key storage items defined in `utils/storage.ts`:
+
+| Item | Key | Type | Purpose |
+|---|---|---|---|
+| `scriptsItem` | `local:scripts` | `UserScript[]` | All installed userscripts |
+| `settingsItem` | `local:settings` | `Settings` | Global settings (e.g. maxRetries) |
+| `scriptStoreItem` | `local:script-store` | `ScriptStore` | Per-script persistent key/value data (GM_* API) |
+
 Use `.watch()` for reactive updates in React (already wired in the popup):
 
 ```ts
@@ -269,6 +277,49 @@ Key facts for agents:
 - The `"alarms"` permission is also present — used for a keep-alive heartbeat that reconnects the MCP WebSocket bridge if it drops.
 
 Do NOT suggest using `chrome.scripting.executeScript` with a script-tag injection pattern — that was the old approach and is no longer used.
+
+---
+
+## Script Store — GM_* API
+
+OpenMonkey auto-injects persistent-storage helper functions into every userscript's `USER_SCRIPT` world. Scripts call them **without any import or setup** — injected as a code preamble by `buildGMPreamble()` in `background.ts`.
+
+### Available Functions
+
+| Function | Signature | Description |
+|---|---|---|
+| `GM_getValue` | `(key, default?) → Promise<unknown>` | Read a stored value; returns `default` if absent |
+| `GM_setValue` | `(key, value, secret?) → Promise<void>` | Write a value; `secret: true` masks it in the popup |
+| `GM_setValues` | `(patch, secretKeys?) → Promise<void>` | **Atomic** multi-key write — always prefer over looping `GM_setValue` |
+| `GM_deleteValue` | `(key) → Promise<void>` | Delete a key |
+| `GM_listValues` | `() → Promise<string[]>` | List all keys in this script's namespace |
+
+### Architecture
+
+```
+USER_SCRIPT world (script code)
+  → window.dispatchEvent('om-store-*' + requestId)
+  → script-bridge.content.ts  (ISOLATED world content script, runs at document_start)
+  → scriptStoreItem  (chrome.storage.local  →  local:script-store)
+  → window.dispatchEvent('om-store-*-ack' + requestId)  ← write confirms back to USER_SCRIPT
+```
+
+- **Namespace** = the script's ID (UUID). Automatic, no configuration. **Scripts cannot read or write another script's namespace** — there is no global cross-script storage. This prevents a malicious `*://*/*` script from stealing secrets set by a trusted script.
+- `om-store-set`, `om-store-setmany`, `om-store-delete` all dispatch ack events (`om-store-set-ack`, `om-store-setmany-ack`, `om-store-delete-ack`) after the storage write completes. The preamble functions await the ack, so `await GM_setValue(...)` guarantees the write is persisted before returning.
+- `om-store-setmany` is the atomic multi-key event — always prefer `GM_setValues` over multiple `GM_setValue` calls to avoid read-merge-write race conditions.
+- `scriptStoreItem` is defined in `utils/storage.ts` as `local:script-store` (type `ScriptStore = Record<string, Record<string, ScriptStoreEntry>>`).
+- The popup **Script Data** view supports full CRUD: `+ Add to…` dropdown pre-populates any script's namespace; existing entries support inline edit (✎), delete (✕), and secret reveal (👁); script names are shown (not raw UUIDs). Deleting a script also deletes its stored namespace.
+
+### Key Rules for Agents
+
+- Never suggest `localStorage` for persistent script data — it's per-origin and wiped on site changes.
+- Use `GM_setValues` (not `GM_setValue` in a loop) when writing multiple keys atomically.
+- Mark credentials and tokens with `secret: true` / `secretKeys: ['apiKey']`.
+- `GM_setValue`, `GM_setValues`, `GM_deleteValue` all return Promises that resolve after the storage write completes. `await GM_setValue(...); await GM_getValue(...)` is safe — no race condition.
+- Storage is per-script namespaced. Scripts cannot access each other's data. Do NOT suggest global shared storage — it would allow any script to read secrets set by other scripts.
+- Deleting a script via the popup also removes its stored namespace from `scriptStoreItem`.
+- `script-bridge.content.ts` auto-registers via WXT's `.content.ts` naming convention — no manual config needed.
+- Saving or editing a script in the popup sends a `script_toggled` message to the background, which reloads the active tab if the script's `@match` covers it.
 
 ---
 

@@ -26,9 +26,9 @@ import { scriptStoreItem } from '../utils/storage';
 
 interface StoreGetAllDetail  { requestId: string; namespace: string; }
 interface StoreGetDetail     { requestId: string; namespace: string; key: string; }
-interface StoreSetDetail     { namespace: string; key: string; value: unknown; secret?: boolean; }
-interface StoreSetManyDetail { namespace: string; patch: Record<string, { value: unknown; secret: boolean }>; }
-interface StoreDeleteDetail  { namespace: string; key: string; }
+interface StoreSetDetail     { requestId: string; namespace: string; key: string; value: unknown; secret?: boolean; }
+interface StoreSetManyDetail { requestId: string; namespace: string; patch: Record<string, { value: unknown; secret: boolean }>; }
+interface StoreDeleteDetail  { requestId: string; namespace: string; key: string; }
 interface StoreListDetail    { requestId: string; namespace: string; }
 
 export default defineContentScript({
@@ -53,7 +53,7 @@ export default defineContentScript({
     });
 
     window.addEventListener('om-store-set', async (e: Event) => {
-      const { namespace, key, value, secret = false } = (e as CustomEvent<StoreSetDetail>).detail;
+      const { requestId, namespace, key, value, secret = false } = (e as CustomEvent<StoreSetDetail>).detail;
       const store = await scriptStoreItem.getValue();
       await scriptStoreItem.setValue({
         ...store,
@@ -62,6 +62,7 @@ export default defineContentScript({
           [key]: { value, secret, updatedAt: Date.now() },
         },
       });
+      window.dispatchEvent(new CustomEvent('om-store-set-ack', { detail: { requestId } }));
     });
 
     window.addEventListener('om-store-list', async (e: Event) => {
@@ -73,7 +74,7 @@ export default defineContentScript({
 
     // Atomic multi-key write — avoids race conditions when saving several keys at once.
     window.addEventListener('om-store-setmany', async (e: Event) => {
-      const { namespace, patch } = (e as CustomEvent<StoreSetManyDetail>).detail;
+      const { requestId, namespace, patch } = (e as CustomEvent<StoreSetManyDetail>).detail;
       const store = await scriptStoreItem.getValue();
       await scriptStoreItem.setValue({
         ...store,
@@ -86,12 +87,16 @@ export default defineContentScript({
           ),
         },
       });
+      window.dispatchEvent(new CustomEvent('om-store-setmany-ack', { detail: { requestId } }));
     });
 
     window.addEventListener('om-store-delete', async (e: Event) => {
-      const { namespace, key } = (e as CustomEvent<StoreDeleteDetail>).detail;
+      const { requestId, namespace, key } = (e as CustomEvent<StoreDeleteDetail>).detail;
       const store = await scriptStoreItem.getValue();
-      if (!store[namespace]) return;
+      if (!store[namespace]) {
+        window.dispatchEvent(new CustomEvent('om-store-delete-ack', { detail: { requestId } }));
+        return;
+      }
       const ns = { ...store[namespace] };
       delete ns[key];
       const updated = { ...store };
@@ -101,6 +106,7 @@ export default defineContentScript({
         updated[namespace] = ns;
       }
       await scriptStoreItem.setValue(updated);
+      window.dispatchEvent(new CustomEvent('om-store-delete-ack', { detail: { requestId } }));
     });
   },
 });

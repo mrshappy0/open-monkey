@@ -52,14 +52,19 @@ export const SCRIPT_TEMPLATE = `\
 (async function () {
   'use strict';
 
-  // Persistent storage — survives tab switches and browser restarts.
+  // ── Persistent storage ─────────────────────────────────────────────────────
+  // GM_* functions are auto-injected by OpenMonkey — no imports needed.
   // Keys are namespaced to this script automatically.
   //
-  // const value = await GM_getValue('myKey', 'defaultValue');
-  // await GM_setValue('myKey', 'someValue');
-  // await GM_setValue('apiKey', 'sk-...', true); // true = secret (masked in popup)
-  // await GM_deleteValue('myKey');
-  // const keys = await GM_listValues();
+  //   const value = await GM_getValue('myKey', 'default');
+  //   await GM_setValue('myKey', 'newValue');
+  //   await GM_setValue('apiKey', 'sk-...', true);          // secret: masked in popup
+  //   await GM_setValues({ key1: 'a', apiKey: 'sk-...' }, ['apiKey']); // atomic write
+  //   await GM_deleteValue('myKey');
+  //   const keys = await GM_listValues();
+  //
+  // Use the "Insert" toolbar above to paste ready-to-use snippets.
+  // ──────────────────────────────────────────────────────────────────────────
 
   // Your code here
 })();

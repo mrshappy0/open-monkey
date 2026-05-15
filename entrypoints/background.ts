@@ -270,26 +270,55 @@ function buildGMPreamble(scriptId: string): string {
     });
   }
   function GM_setValue(key, value, secret) {
-    window.dispatchEvent(new CustomEvent('om-store-set', {
-      detail: { namespace: _NS, key: key, value: value, secret: !!secret }
-    }));
+    return new Promise(function (resolve) {
+      var rid = Math.random().toString(36).slice(2) + Date.now().toString(36);
+      function onAck(e) {
+        if (e.detail.requestId !== rid) return;
+        window.removeEventListener('om-store-set-ack', onAck);
+        resolve();
+      }
+      window.addEventListener('om-store-set-ack', onAck);
+      window.dispatchEvent(new CustomEvent('om-store-set', {
+        detail: { requestId: rid, namespace: _NS, key: key, value: value, secret: !!secret }
+      }));
+    });
   }
   // Atomic multi-key write — pass an object of { key: value } and an optional
   // array (or function) of keys that should be marked as secrets.
   function GM_setValues(patch, secretKeys) {
-    var isSecret = typeof secretKeys === 'function'
-      ? secretKeys
-      : function(k) { return Array.isArray(secretKeys) && secretKeys.indexOf(k) !== -1; };
-    var entries = {};
-    Object.keys(patch).forEach(function(k) {
-      entries[k] = { value: patch[k], secret: !!isSecret(k) };
+    return new Promise(function (resolve) {
+      var rid = Math.random().toString(36).slice(2) + Date.now().toString(36);
+      var isSecret = typeof secretKeys === 'function'
+        ? secretKeys
+        : function(k) { return Array.isArray(secretKeys) && secretKeys.indexOf(k) !== -1; };
+      var entries = {};
+      Object.keys(patch).forEach(function(k) {
+        entries[k] = { value: patch[k], secret: !!isSecret(k) };
+      });
+      function onAck(e) {
+        if (e.detail.requestId !== rid) return;
+        window.removeEventListener('om-store-setmany-ack', onAck);
+        resolve();
+      }
+      window.addEventListener('om-store-setmany-ack', onAck);
+      window.dispatchEvent(new CustomEvent('om-store-setmany', {
+        detail: { requestId: rid, namespace: _NS, patch: entries }
+      }));
     });
-    window.dispatchEvent(new CustomEvent('om-store-setmany', {
-      detail: { namespace: _NS, patch: entries }
-    }));
   }
   function GM_deleteValue(key) {
-    window.dispatchEvent(new CustomEvent('om-store-delete', { detail: { namespace: _NS, key: key } }));
+    return new Promise(function (resolve) {
+      var rid = Math.random().toString(36).slice(2) + Date.now().toString(36);
+      function onAck(e) {
+        if (e.detail.requestId !== rid) return;
+        window.removeEventListener('om-store-delete-ack', onAck);
+        resolve();
+      }
+      window.addEventListener('om-store-delete-ack', onAck);
+      window.dispatchEvent(new CustomEvent('om-store-delete', {
+        detail: { requestId: rid, namespace: _NS, key: key }
+      }));
+    });
   }
   function GM_listValues() {
     return new Promise(function (resolve) {
