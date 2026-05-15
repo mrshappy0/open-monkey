@@ -57,12 +57,6 @@
   },
   "packageManager": "pnpm@11.1.2",
   "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild"
-    ],
-    "ignoredBuiltDependencies": [
-      "spawn-sync"
-    ],
     "overrides": {
       "ip-address": "^10.2.0"
     }
