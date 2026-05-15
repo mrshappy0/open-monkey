@@ -31,5 +31,8 @@ jobs:
         run: pnpm lint
       - name: Release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # GH_TOKEN must be a classic PAT (repo scope) from a repo admin.
+          # GITHUB_TOKEN alone cannot push to protected main.
+          # Create one at https://github.com/settings/tokens and add as GH_TOKEN secret.
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
         run: pnpm exec semantic-release
