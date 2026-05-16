@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { parseMeta, SCRIPT_TEMPLATE } from '../../utils/meta-parser';
 import { scriptsItem, settingsItem, scriptStoreItem, type UserScript, type ScriptStore } from '../../utils/storage';
 import './App.css';
+
+const CodeEditor = lazy(() => import('./CodeEditor'));
 
 type View = 'list' | 'editor' | 'store';
 
@@ -186,19 +188,14 @@ export default function App() {
     setNewEntrySecret(false);
   }
 
-  const editorRef = useRef<HTMLTextAreaElement>(null);
+  const insertIntoEditor = useRef<((text: string) => void) | null>(null);
 
   function insertSnippet(snippet: string) {
-    const ta = editorRef.current;
-    if (!ta) { setEditorCode(c => c + snippet); return; }
-    const start = ta.selectionStart;
-    const end = ta.selectionEnd;
-    const next = editorCode.slice(0, start) + snippet + editorCode.slice(end);
-    setEditorCode(next);
-    requestAnimationFrame(() => {
-      ta.focus();
-      ta.selectionStart = ta.selectionEnd = start + snippet.length;
-    });
+    if (insertIntoEditor.current) {
+      insertIntoEditor.current(snippet);
+    } else {
+      setEditorCode(c => c + snippet);
+    }
   }
 
   if (view === 'store') {
@@ -369,12 +366,29 @@ export default function App() {
 
   if (view === 'editor') {
     return (
-      <div className="app">
+      <div className="app app--editor">
         <header className="header">
           <button className="btn-text" onClick={() => setView('list')}>
             ← Back
           </button>
           <span className="header-title">{editingId ? 'Edit Script' : 'New Script'}</span>
+          <button
+            className="btn-text"
+            title="Open in full-screen tab"
+            onClick={async () => {
+              let id = editingId;
+              if (!id) {
+                id = crypto.randomUUID();
+                const meta = parseMeta(editorCode);
+                await persist([...scripts, { id, name: meta.name, enabled: true, code: editorCode }]);
+                setEditingId(id);
+              }
+              browser.tabs.create({ url: browser.runtime.getURL('/editor.html') + '?id=' + id });
+              setView('list');
+            }}
+          >
+            ↗
+          </button>
           <button className="btn-primary" onClick={saveScript} disabled={saving}>
             {saving ? 'Saving…' : 'Save'}
           </button>
@@ -384,15 +398,13 @@ export default function App() {
           <button className="editor-snippet-btn" onClick={() => insertSnippet(GM_SNIPPET)}>GM storage</button>
           <button className="editor-snippet-btn" onClick={() => insertSnippet(GM_SECRET_SNIPPET)}>GM secret</button>
         </div>
-        <textarea
-          ref={editorRef}
-          className="editor"
-          value={editorCode}
-          onChange={e => setEditorCode(e.target.value)}
-          spellCheck={false}
-          autoCapitalize="off"
-          autoCorrect="off"
-        />
+        <Suspense fallback={<div className="editor-loading" />}>
+          <CodeEditor
+            value={editorCode}
+            onChange={setEditorCode}
+            onReady={fn => { insertIntoEditor.current = fn; }}
+          />
+        </Suspense>
       </div>
     );
   }
