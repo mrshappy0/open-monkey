@@ -23,11 +23,11 @@ export default function EditorApp() {
   const [title, setTitle] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveLabel, setSaveLabel] = useState('Save');
-  const [notFound, setNotFound] = useState(false);
-  const insertIntoEditor = useRef<((text: string) => void) | null>(null);
+  const [notFound, setNotFound] = useState(!scriptId);
+  const insertIntoEditorRef = useRef<((text: string) => void) | null>(null);
 
   useEffect(() => {
-    if (!scriptId) { setNotFound(true); return; }
+    if (!scriptId) return;
     scriptsItem.getValue().then(scripts => {
       const script = scripts.find(s => s.id === scriptId);
       if (!script) { setNotFound(true); return; }
@@ -37,8 +37,8 @@ export default function EditorApp() {
   }, [scriptId]);
 
   function insertSnippet(snippet: string) {
-    if (insertIntoEditor.current) {
-      insertIntoEditor.current(snippet);
+    if (insertIntoEditorRef.current) {
+      insertIntoEditorRef.current(snippet);
     } else {
       setCode(c => c + snippet);
     }
@@ -83,7 +83,7 @@ export default function EditorApp() {
         <CodeEditor
           value={code}
           onChange={setCode}
-          onReady={fn => { insertIntoEditor.current = fn; }}
+          onReady={fn => { insertIntoEditorRef.current = fn; }}
         />
       </div>
     </div>

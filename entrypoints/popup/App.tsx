@@ -30,7 +30,7 @@ export default function App() {
   const [maxRetries, setMaxRetries] = useState(3);
   const [bridgeConnected, setBridgeConnected] = useState<boolean | null>(null);
   const [storeData, setStoreData] = useState<ScriptStore>({});
-  const [revealed, setRevealed] = useState<Set<string>>(new Set());
+  const [revealed, setRevealed] = useState<Set<string>>(() => new Set());
   const [editingEntry, setEditingEntry] = useState<{ ns: string; key: string } | null>(null);
   const [editingValue, setEditingValue] = useState('');
   const [editingSecret, setEditingSecret] = useState(false);
@@ -188,11 +188,11 @@ export default function App() {
     setNewEntrySecret(false);
   }
 
-  const insertIntoEditor = useRef<((text: string) => void) | null>(null);
+  const insertIntoEditorRef = useRef<((text: string) => void) | null>(null);
 
   function insertSnippet(snippet: string) {
-    if (insertIntoEditor.current) {
-      insertIntoEditor.current(snippet);
+    if (insertIntoEditorRef.current) {
+      insertIntoEditorRef.current(snippet);
     } else {
       setEditorCode(c => c + snippet);
     }
@@ -402,7 +402,7 @@ export default function App() {
           <CodeEditor
             value={editorCode}
             onChange={setEditorCode}
-            onReady={fn => { insertIntoEditor.current = fn; }}
+            onReady={fn => { insertIntoEditorRef.current = fn; }}
           />
         </Suspense>
       </div>

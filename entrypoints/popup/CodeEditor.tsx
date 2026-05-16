@@ -126,7 +126,7 @@ export default function CodeEditor({ value, onChange, onReady }: CodeEditorProps
       view.destroy();
       viewRef.current = null;
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps, @eslint-react/exhaustive-deps
   }, []); // intentionally mount/unmount only; value synced below
 
   // Sync when the user opens a different script in the editor.
