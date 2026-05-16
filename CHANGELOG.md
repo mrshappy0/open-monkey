@@ -1,3 +1,10 @@
+# [1.3.0](https://github.com/mrshappy0/open-monkey/compare/v1.2.0...v1.3.0) (2026-05-16)
+
+
+### Features
+
+* CodeMirror 6 editor with syntax highlighting and full-screen tab ([#14](https://github.com/mrshappy0/open-monkey/issues/14)) ([cadde6d](https://github.com/mrshappy0/open-monkey/commit/cadde6de36e0002dbe55cd76587750e48f55b9f2))
+
 # [1.2.0](https://github.com/mrshappy0/open-monkey/compare/v1.1.0...v1.2.0) (2026-05-15)
 
 
