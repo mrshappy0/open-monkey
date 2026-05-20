@@ -46,7 +46,7 @@
     "@semantic-release/git": "^10.0.1",
     "@types/chrome": "^0.1.42",
     "@types/node": "^25.7.0",
-    "@types/react": "^19.2.14",
+    "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
     "@types/ws": "^8.5.14",
     "@wxt-dev/module-react": "^1.2.2",
