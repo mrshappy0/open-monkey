@@ -1,6 +1,6 @@
 import { parseMeta } from '../utils/meta-parser';
 import { matchesPattern } from '../utils/match-pattern';
-import { scriptsItem, settingsItem, type UserScript } from '../utils/storage';
+import { scriptsItem, settingsItem, scriptStoreItem, type UserScript, type ScriptStore, type ScriptStoreEntry } from '../utils/storage';
 import { logger } from '../utils/logger';
 import testBannerCode from '../dev-scripts/test-banner.user.js?raw';
 import askPageCode from '../dev-scripts/ask-page.user.js?raw';
@@ -43,9 +43,14 @@ const BUILTIN_SCRIPTS: BuiltinScript[] = [
 
 const SYNC_FLAG_KEY = 'om_sync_enabled';
 const SYNC_IDS_KEY = 'om_script_ids';
+const SYNC_STORE_PREFIX = 'om_st_';
 
 function syncScriptKey(id: string): string {
   return `om_s_${id.replace(/[^a-zA-Z0-9]/g, '_')}`;
+}
+
+function syncStoreKey(id: string): string {
+  return `${SYNC_STORE_PREFIX}${id.replace(/[^a-zA-Z0-9]/g, '_')}`;
 }
 
 // Chrome sync quotas are enforced in bytes (UTF-8). Use TextEncoder so the
@@ -68,86 +73,131 @@ function chunkStringByBytes(s: string): string[] {
   return out;
 }
 
-async function writeSyncScripts(scripts: UserScript[]): Promise<void> {
-  // Clear stale chunk keys before writing so orphaned chunks don't accumulate.
-  await clearSyncScripts();
-  const enc = new TextEncoder();
-  const toSet: Record<string, unknown> = {
-    [SYNC_FLAG_KEY]: true,
-    [SYNC_IDS_KEY]: scripts.map(s => s.id),
-  };
-  for (const s of scripts) {
-    const json = JSON.stringify(s);
-    const base = syncScriptKey(s.id);
-    if (enc.encode(json).byteLength <= SYNC_CHUNK_BYTES) {
-      // Store the serialized JSON string so the measured byte length matches
-      // exactly what Chrome will persist (no double-serialization surprise).
-      toSet[base] = json;
-    } else {
-      const chunks = chunkStringByBytes(json);
-      toSet[base] = { chunked: true, count: chunks.length };
-      chunks.forEach((c, i) => { toSet[`${base}_c${i}`] = c; });
+async function writeSyncScripts(scripts: UserScript[], store: ScriptStore): Promise<void> {
+  isSyncWriting = true;
+  try {
+    // Clear stale chunk keys before writing so orphaned chunks don't accumulate.
+    await clearSyncScripts();
+    const enc = new TextEncoder();
+    const toSet: Record<string, unknown> = {
+      [SYNC_FLAG_KEY]: true,
+      [SYNC_IDS_KEY]: scripts.map(s => s.id),
+    };
+    for (const s of scripts) {
+      const json = JSON.stringify(s);
+      const base = syncScriptKey(s.id);
+      if (enc.encode(json).byteLength <= SYNC_CHUNK_BYTES) {
+        // Store the serialized JSON string so the measured byte length matches
+        // exactly what Chrome will persist (no double-serialization surprise).
+        toSet[base] = json;
+      } else {
+        const chunks = chunkStringByBytes(json);
+        toSet[base] = { chunked: true, count: chunks.length };
+        chunks.forEach((c, i) => { toSet[`${base}_c${i}`] = c; });
+      }
     }
+    // Also mirror GM_* script store data (apiKey, apiModel, etc.) so config
+    // follows the script to other devices. Uses same chunking strategy.
+    for (const s of scripts) {
+      const ns = store[s.id];
+      if (!ns || Object.keys(ns).length === 0) continue;
+      const json = JSON.stringify(ns);
+      const base = syncStoreKey(s.id);
+      if (enc.encode(json).byteLength <= SYNC_CHUNK_BYTES) {
+        toSet[base] = json;
+      } else {
+        const chunks = chunkStringByBytes(json);
+        toSet[base] = { chunked: true, count: chunks.length };
+        chunks.forEach((c, i) => { toSet[`${base}_c${i}`] = c; });
+      }
+    }
+    await browser.storage.sync.set(toSet);
+  } finally {
+    isSyncWriting = false;
   }
-  await browser.storage.sync.set(toSet);
 }
 
 async function clearSyncScripts(): Promise<void> {
   const existing = await browser.storage.sync.get(null);
   const keys = Object.keys(existing).filter(
-    k => k === SYNC_FLAG_KEY || k === SYNC_IDS_KEY || k.startsWith('om_s_'),
+    k => k === SYNC_FLAG_KEY || k === SYNC_IDS_KEY || k.startsWith('om_s_') || k.startsWith(SYNC_STORE_PREFIX),
   );
   if (keys.length > 0) await browser.storage.sync.remove(keys);
 }
 
-async function readSyncScripts(): Promise<UserScript[] | null> {
+/** Reassemble a chunked-or-inline entry from a sync data snapshot. */
+function reassembleEntry<T>(
+  base: string,
+  data: Record<string, unknown>,
+  label: string,
+  id: string,
+): T | null {
+  const entry = data[base] as string | { chunked: true; count: number } | undefined;
+  if (!entry) return null;
+  try {
+    if (typeof entry === 'string') return JSON.parse(entry) as T;
+    const { count } = entry;
+    if (!Number.isFinite(count) || count < 1 || count > 100) {
+      logger.warn('[sync] invalid chunk count for', label, id, count);
+      return null;
+    }
+    const chunks: string[] = [];
+    for (let i = 0; i < count; i++) {
+      const chunk = data[`${base}_c${i}`];
+      if (typeof chunk !== 'string') {
+        logger.warn('[sync] missing chunk', i, 'for', label, id);
+        return null;
+      }
+      chunks.push(chunk);
+    }
+    return JSON.parse(chunks.join('')) as T;
+  } catch {
+    logger.warn('[sync] failed to parse', label, id);
+    return null;
+  }
+}
+
+async function readSyncScripts(): Promise<{ scripts: UserScript[]; store: ScriptStore } | null> {
   const data = await browser.storage.sync.get(null);
   if (!data[SYNC_FLAG_KEY]) return null;
   const ids = (data[SYNC_IDS_KEY] as string[] | undefined) ?? [];
   const scripts: UserScript[] = [];
+  const store: ScriptStore = {};
   for (const id of ids) {
-    const base = syncScriptKey(id);
-    const entry = data[base] as string | { chunked: true; count: number } | undefined;
-    if (!entry) {
+    const script = reassembleEntry<UserScript>(syncScriptKey(id), data, 'script', id);
+    if (!script) {
       logger.warn('[sync] missing sync entry for script', id);
       continue;
     }
-    try {
-      if (typeof entry === 'string') {
-        // Non-chunked path: entry is the raw JSON string of the UserScript.
-        scripts.push(JSON.parse(entry) as UserScript);
-      } else {
-        const { count } = entry;
-        if (!Number.isFinite(count) || count < 1 || count > 100) {
-          logger.warn('[sync] invalid chunk count for script', id, count);
-          continue;
-        }
-        // Validate every chunk is present before joining — avoids silently
-        // parsing a corrupt/truncated script.
-        const chunks: string[] = [];
-        let missing = false;
-        for (let i = 0; i < count; i++) {
-          const chunk = data[`${base}_c${i}`];
-          if (typeof chunk !== 'string') {
-            logger.warn('[sync] missing chunk', i, 'for script', id);
-            missing = true;
-            break;
-          }
-          chunks.push(chunk);
-        }
-        if (missing) continue;
-        scripts.push(JSON.parse(chunks.join('')) as UserScript);
-      }
-    } catch {
-      logger.warn('[sync] failed to parse script', id);
-    }
+    scripts.push(script);
+    // Restore GM_* store data for this script namespace (apiKey, apiModel, etc.).
+    const ns = reassembleEntry<Record<string, ScriptStoreEntry>>(syncStoreKey(id), data, 'store', id);
+    if (ns) store[id] = ns;
   }
-  return scripts;
+  return { scripts, store };
+}
+
+// Guards that break the write→sync→onChanged→pull→write feedback loop:
+// • applyingSyncPull: set while applySyncState() is running; watch() handlers
+//   check this and skip their push so data we just pulled isn't echoed back.
+// • isSyncWriting:   set while writeSyncScripts() is running; onChanged handler
+//   checks this and ignores events that the local machine generated itself.
+let applyingSyncPull = false;
+let isSyncWriting = false;
+
+async function applySyncState(synced: { scripts: UserScript[]; store: ScriptStore }): Promise<void> {
+  applyingSyncPull = true;
+  try {
+    await scriptsItem.setValue(synced.scripts);
+    await scriptStoreItem.setValue(synced.store);
+  } finally {
+    applyingSyncPull = false;
+  }
 }
 
 /**
  * On startup: if another device enabled sync, pull scripts down and enable
- * locally. If already enabled locally, push current state to sync.
+ * locally. If already enabled, pull the latest state from sync (authoritative).
  */
 async function initSync(): Promise<void> {
   const [settings, syncFlag] = await Promise.all([
@@ -156,28 +206,40 @@ async function initSync(): Promise<void> {
   ]);
 
   if (!settings.syncEnabled && syncFlag[SYNC_FLAG_KEY]) {
-    // Another device turned on sync. Only auto-pull on a fresh install (no local
-    // scripts) — overwriting existing local-only scripts would be destructive.
+    // Another device turned on sync. Auto-pull only when no user-added scripts
+    // exist yet — builtin scripts (fixed IDs starting with 'openmonkey-builtin-')
+    // are seeded on every install and must not block the pull.
     const localScripts = await scriptsItem.getValue();
-    if (localScripts.length === 0) {
+    const hasUserScripts = localScripts.some(s => !s.id.startsWith('openmonkey-builtin-'));
+    if (!hasUserScripts) {
       const synced = await readSyncScripts();
-      if (synced && synced.length > 0) {
+      if (synced && synced.scripts.length > 0) {
+        await applySyncState(synced);
         await settingsItem.setValue({ ...settings, syncEnabled: true });
-        await scriptsItem.setValue(synced);
-        logger.log('[sync] pulled', synced.length, 'scripts from Chrome sync (enabled by another device)');
+        logger.log('[sync] pulled', synced.scripts.length, 'scripts + store from Chrome sync (enabled by another device)');
       }
     } else {
-      logger.log('[sync] skipping auto-pull — device already has', localScripts.length, 'local script(s)');
+      logger.log('[sync] skipping auto-pull — device already has user-added scripts');
     }
     return;
   }
 
   if (settings.syncEnabled) {
-    // Already enabled — push local state to sync on restart.
-    const scripts = await scriptsItem.getValue();
-    await writeSyncScripts(scripts).catch((err: unknown) =>
-      logger.warn('[sync] startup mirror failed:', err),
-    );
+    // Pull from sync so changes made on other devices are applied here on restart.
+    // Real-time push happens via watch() handlers — don't push on startup or we'd
+    // clobber data written by the other machine while this one was offline/closed.
+    const synced = await readSyncScripts();
+    if (synced !== null) {
+      // Sync has been initialized — treat it as authoritative.
+      await applySyncState(synced);
+      logger.log('[sync] startup pull:', synced.scripts.length, 'scripts + store applied');
+    } else {
+      // Sync flag absent (e.g. Chrome sync was cleared) — prime it from local state.
+      const [scripts, store] = await Promise.all([scriptsItem.getValue(), scriptStoreItem.getValue()]);
+      await writeSyncScripts(scripts, store).catch((err: unknown) =>
+        logger.warn('[sync] startup push (re-prime) failed:', err),
+      );
+    }
   }
 }
 
@@ -547,21 +609,54 @@ export default defineBackground(() => {
   // Silently retries every few seconds; no-op when native-host isn't active.
   connectBridge();
 
-  // Ensure built-in scripts are present in storage on every worker startup.
-  ensureBuiltinScripts().catch((err: unknown) => logger.warn('ensureBuiltinScripts failed:', err));
-
-  // Initialize Chrome sync — auto-pull if another device enabled it.
-  initSync().catch((err: unknown) => logger.warn('initSync failed:', err));
-
   // Mirror script mutations to chrome.storage.sync while sync is enabled.
+  // applyingSyncPull guard prevents echoing data we just pulled back to sync.
   scriptsItem.watch(async (scripts) => {
-    const settings = await settingsItem.getValue();
+    if (applyingSyncPull) return;
+    const [settings, store] = await Promise.all([settingsItem.getValue(), scriptStoreItem.getValue()]);
     if (settings.syncEnabled && scripts) {
-      writeSyncScripts(scripts).catch((err: unknown) =>
+      writeSyncScripts(scripts, store).catch((err: unknown) =>
         logger.warn('[sync] mirror write failed:', err),
       );
     }
   });
+
+  scriptStoreItem.watch(async (store) => {
+    if (applyingSyncPull) return;
+    const [settings, scripts] = await Promise.all([settingsItem.getValue(), scriptsItem.getValue()]);
+    if (settings.syncEnabled && store) {
+      writeSyncScripts(scripts, store).catch((err: unknown) =>
+        logger.warn('[sync] store mirror write failed:', err),
+      );
+    }
+  });
+
+  // Live sync: apply changes pushed to Chrome sync by another machine immediately,
+  // without needing a service worker restart. isSyncWriting prevents reacting to
+  // our own writes (which also fire onChanged on the same machine).
+  browser.storage.onChanged.addListener(async (changes, area) => {
+    if (area !== 'sync') return;
+    if (isSyncWriting) return;
+    const hasSyncChange = Object.keys(changes).some(
+      k => k === SYNC_FLAG_KEY || k === SYNC_IDS_KEY || k.startsWith('om_s_') || k.startsWith(SYNC_STORE_PREFIX),
+    );
+    if (!hasSyncChange) return;
+    const settings = await settingsItem.getValue();
+    if (!settings.syncEnabled) return;
+    const synced = await readSyncScripts();
+    if (synced !== null) {
+      await applySyncState(synced);
+      logger.log('[sync] live update: applied', synced.scripts.length, 'scripts + store');
+    }
+  });
+
+  // Seed builtins first, then pull sync state. Running them concurrently risks a
+  // race where the builtin-seeding watch fires and pushes partial state to sync
+  // while initSync is still reading from it.
+  (async () => {
+    await ensureBuiltinScripts().catch((err: unknown) => logger.warn('ensureBuiltinScripts failed:', err));
+    await initSync().catch((err: unknown) => logger.warn('initSync failed:', err));
+  })();
 
   // Let the popup query the current bridge state, and handle script toggle reloads.
   browser.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
@@ -575,9 +670,9 @@ export default defineBackground(() => {
       (async () => {
         const settings = await settingsItem.getValue();
         if (enable) {
-          const scripts = await scriptsItem.getValue();
+          const [scripts, store] = await Promise.all([scriptsItem.getValue(), scriptStoreItem.getValue()]);
           try {
-            await writeSyncScripts(scripts);
+            await writeSyncScripts(scripts, store);
             await settingsItem.setValue({ ...settings, syncEnabled: true });
             sendResponse({ ok: true });
           } catch (err) {
