@@ -1,3 +1,10 @@
+## [1.3.1](https://github.com/mrshappy0/open-monkey/compare/v1.3.0...v1.3.1) (2026-05-23)
+
+
+### Bug Fixes
+
+* override uuid>=11.1.1 and qs>=6.15.2 to resolve moderate CVEs ([#21](https://github.com/mrshappy0/open-monkey/issues/21)) ([7c03a0c](https://github.com/mrshappy0/open-monkey/commit/7c03a0c0a0a1cbeca7f9aa62a005b9f9d75f04dc))
+
 # [1.3.0](https://github.com/mrshappy0/open-monkey/compare/v1.2.0...v1.3.0) (2026-05-16)
 
 
