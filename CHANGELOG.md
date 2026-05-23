@@ -1,3 +1,10 @@
+# [1.4.0](https://github.com/mrshappy0/open-monkey/compare/v1.3.1...v1.4.0) (2026-05-23)
+
+
+### Features
+
+* **sync:** mirror script store data and add live sync ([#22](https://github.com/mrshappy0/open-monkey/issues/22)) ([4f9faa1](https://github.com/mrshappy0/open-monkey/commit/4f9faa140ee90baf4ec364fb3c107bc6081eb761))
+
 ## [1.3.1](https://github.com/mrshappy0/open-monkey/compare/v1.3.0...v1.3.1) (2026-05-23)
 
 
