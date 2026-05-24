@@ -189,7 +189,17 @@ async function applySyncState(synced: { scripts: UserScript[]; store: ScriptStor
   applyingSyncPull = true;
   try {
     await scriptsItem.setValue(synced.scripts);
-    await scriptStoreItem.setValue(synced.store);
+    if (Object.keys(synced.store).length > 0) {
+      // Merge: per-script namespaces present in sync fully replace their local
+      // counterpart; namespaces absent from sync are left intact. This prevents
+      // a startup pull from an older sync payload (written before store-syncing
+      // was added) from wiping locally-stored data (apiKey, apiModel, etc.).
+      const currentStore = await scriptStoreItem.getValue() ?? {};
+      await scriptStoreItem.setValue({ ...currentStore, ...synced.store });
+    }
+    // If synced.store is empty, leave scriptStoreItem untouched. Either the sync
+    // payload predates store-syncing, or all scripts genuinely have no data — the
+    // live onChanged listener handles real-time deletions from another machine.
   } finally {
     applyingSyncPull = false;
   }
