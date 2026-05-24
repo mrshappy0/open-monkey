@@ -1,3 +1,10 @@
+## [1.4.1](https://github.com/mrshappy0/open-monkey/compare/v1.4.0...v1.4.1) (2026-05-24)
+
+
+### Bug Fixes
+
+* **sync:** preserve local store data when sync payload has no store entries ([#23](https://github.com/mrshappy0/open-monkey/issues/23)) ([9c77d54](https://github.com/mrshappy0/open-monkey/commit/9c77d546800b55d9238ae0b239ff82fb543d3e24))
+
 # [1.4.0](https://github.com/mrshappy0/open-monkey/compare/v1.3.1...v1.4.0) (2026-05-23)
 
 

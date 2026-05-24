@@ -2,7 +2,7 @@
   "name": "openmonkey",
   "description": "Lightweight, privacy-respecting userscript manager Chrome extension",
   "private": true,
-  "version": "1.4.0",
+  "version": "1.4.1",
   "type": "module",
   "bin": {
     "openmonkey": "./native-host/dist/index.js"
