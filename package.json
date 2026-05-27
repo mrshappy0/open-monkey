@@ -34,7 +34,7 @@
     "@wxt-dev/storage": "^1.2.8",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
-    "ws": "^8.20.1",
+    "ws": "^8.21.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
