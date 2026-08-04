@@ -34,7 +34,7 @@
     "@wxt-dev/storage": "^1.2.8",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
-    "ws": "^8.20.1",
+    "ws": "^8.21.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -52,7 +52,7 @@
     "@wxt-dev/module-react": "^1.2.2",
     "eslint": "^10.4.0",
     "eslint-plugin-react-hooks": "^7.1.1",
-    "ip-address": "10.2.0",
+    "ip-address": "10.3.1",
     "semantic-release": "^25.0.3",
     "tsx": "^4.22.3",
     "typescript": "^6.0.3",
